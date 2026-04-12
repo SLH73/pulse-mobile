@@ -1,6 +1,7 @@
 import React from 'react';
 import { useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { supabase } from '../../src/lib/supabase';
 
 const DEPTH_LEVELS = [
   { min: 0,  label: 'Explorando',   color: '#888780' },
@@ -26,6 +27,11 @@ export default function ProfileScreen() {
   const router = useRouter();
   const level = getLevel(MOCK_PROFILE.depth_score);
   const progress = Math.min(MOCK_PROFILE.depth_score / 30, 1);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.replace('/auth/login');
+  };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
@@ -74,7 +80,7 @@ export default function ProfileScreen() {
         <Text style={styles.actionArrow}>›</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.actionRow}>
+      <TouchableOpacity style={styles.actionRow} onPress={handleSignOut}>
         <Text style={[styles.actionText, { color: '#E24B4A' }]}>Cerrar sesión</Text>
         <Text style={styles.actionArrow}>›</Text>
       </TouchableOpacity>

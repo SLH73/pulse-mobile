@@ -1,65 +1,83 @@
+import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-
-const MOCK_CONTACTS = [
-  { id: '1', hue: 120, symbol: '◆', depth: 5, city: 'Madrid', saved_at: 'hace 2 días' },
-  { id: '2', hue: 200, symbol: '●', depth: 3, city: 'Barcelona', saved_at: 'hace 5 días' },
-  { id: '3', hue: 40,  symbol: '▲', depth: 8, city: 'Madrid', saved_at: 'hace 1 semana' },
-];
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { supabase } from '../../src/lib/supabase';
 
 export default function ContactsScreen() {
   const router = useRouter();
+  const [contacts, setContacts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadContacts();
+  }, []);
+
+  const loadContacts = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setLoading(false); return; }
+
+    const { data } = await supabase
+      .from('saved_contacts')
+      .select('id, contact_id, match_id, saved_at')
+      .eq('user_id', user.id)
+      .order('saved_at', { ascending: false });
+
+    setContacts(data ?? []);
+    setLoading(false);
+  };
+
+  if (loading) {
+    return <View style={s.loader}><ActivityIndicator color="#7F77DD" /></View>;
+  }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
-      <Text style={styles.title}>Contactos</Text>
-      <Text style={styles.subtitle}>{MOCK_CONTACTS.length} conexiones guardadas</Text>
+    <ScrollView style={s.container} contentContainerStyle={s.scroll}>
+      <Text style={s.title}>Contactos</Text>
+      <Text style={s.subtitle}>{contacts.length} conexiones guardadas</Text>
 
-      {MOCK_CONTACTS.map(c => (
-        <TouchableOpacity
-          key={c.id}
-          style={styles.row}
-          onPress={() => router.push(`/chat/${c.id}`)}
-        >
-          <View style={[styles.avatar, { backgroundColor: `hsl(${c.hue}, 60%, 20%)` }]}>
-            <Text style={[styles.avatarSymbol, { color: `hsl(${c.hue}, 60%, 65%)` }]}>
-              {c.symbol}
-            </Text>
-          </View>
-          <View style={styles.rowInfo}>
-            <Text style={styles.depthText}>{c.depth} profundidad · {c.city}</Text>
-            <Text style={styles.savedAt}>Guardado {c.saved_at}</Text>
-          </View>
-          <Text style={styles.arrow}>›</Text>
-        </TouchableOpacity>
-      ))}
+      {contacts.length === 0 ? (
+        <View style={s.empty}>
+          <Text style={s.emptyTitle}>Aun no hay nadie aqui</Text>
+          <Text style={s.emptyText}>Pulsa Guardar en el chat para añadir conexiones.</Text>
+        </View>
+      ) : (
+        contacts.map(c => (
+          <TouchableOpacity key={c.id} style={s.row} onPress={() => router.push(`/chat/${c.match_id}`)}>
+            <View style={s.avatar}>
+              <Text style={s.avatarText}>*</Text>
+            </View>
+            <View style={s.info}>
+              <Text style={s.name}>Conexion guardada</Text>
+              <Text style={s.date}>{new Date(c.saved_at).toLocaleDateString('es')}</Text>
+            </View>
+            <Text style={s.arrow}>›</Text>
+          </TouchableOpacity>
+        ))
+      )}
 
-      <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-        <Text style={styles.backText}>← Volver</Text>
+      <TouchableOpacity style={s.back} onPress={() => router.back()}>
+        <Text style={s.backText}>Volver</Text>
       </TouchableOpacity>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
+  loader: { flex: 1, backgroundColor: '#0D0D0D', alignItems: 'center', justifyContent: 'center' },
   container: { flex: 1, backgroundColor: '#0D0D0D' },
-  scroll: { padding: 24, paddingTop: 48 },
+  scroll: { padding: 24, paddingTop: 48, paddingBottom: 48 },
   title: { fontSize: 28, fontWeight: '500', color: '#F0F0EE', marginBottom: 4 },
   subtitle: { fontSize: 13, color: '#5F5E5A', marginBottom: 32 },
-  row: {
-    flexDirection: 'row', alignItems: 'center',
-    gap: 14, paddingVertical: 16,
-    borderBottomWidth: 0.5, borderBottomColor: '#2E2E2C',
-  },
-  avatar: {
-    width: 48, height: 48, borderRadius: 24,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  avatarSymbol: { fontSize: 20 },
-  rowInfo: { flex: 1 },
-  depthText: { fontSize: 15, color: '#F0F0EE', marginBottom: 3 },
-  savedAt: { fontSize: 12, color: '#5F5E5A' },
+  empty: { backgroundColor: '#1A1A18', borderRadius: 16, padding: 32, alignItems: 'center', borderWidth: 0.5, borderColor: '#2E2E2C' },
+  emptyTitle: { fontSize: 18, fontWeight: '500', color: '#F0F0EE', marginBottom: 12 },
+  emptyText: { fontSize: 14, color: '#5F5E5A', textAlign: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16, borderBottomWidth: 0.5, borderBottomColor: '#2E2E2C' },
+  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#1D1D3A', alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontSize: 20, color: '#7F77DD' },
+  info: { flex: 1 },
+  name: { fontSize: 15, color: '#F0F0EE', marginBottom: 3 },
+  date: { fontSize: 12, color: '#5F5E5A' },
   arrow: { fontSize: 22, color: '#2E2E2C' },
-  backBtn: { marginTop: 32 },
+  back: { marginTop: 32 },
   backText: { fontSize: 15, color: '#7F77DD' },
 });
