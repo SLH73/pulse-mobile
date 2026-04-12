@@ -17,6 +17,7 @@
     "expo": "~54.0.33",
     "expo-constants": "~18.0.13",
     "expo-device": "~8.0.10",
+    "expo-linking": "^55.0.12",
     "expo-media-library": "~18.2.1",
     "expo-notifications": "^0.32.16",
     "expo-router": "~6.0.23",
