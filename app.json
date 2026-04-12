@@ -5,6 +5,11 @@
         "projectId": "0eeaa082-4aeb-47df-9699-f30d621983fb"
       }
     },
-    "owner": "pulse-app73"
+    "owner": "pulse-app73",
+    "name": "pulse-mobile",
+    "slug": "pulse-mobile",
+    "android": {
+      "package": "com.pulseapp73.pulsemobile"
+    }
   }
 }
