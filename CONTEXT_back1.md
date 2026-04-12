@@ -414,32 +414,27 @@ MODEL_NAME=paraphrase-multilingual-mpnet-base-v2
 - [x] Cuenta Expo creada — username: **pulse-app73**
 - [x] Proyecto vinculado — ID: **0eeaa082-4aeb-47df-9699-f30d621983fb**
 - [x] Project URL: https://expo.dev/accounts/pulse-app73/projects/pulse-mobile
-- [x] GitHub: https://github.com/SLH73/pulse-mobile (privado)
-- [x] Expo Go instalado en Samsung Galaxy A32 5G
-- [x] Servidor local con `npx expo start` funcionando
+- [x] Estructura de carpetas: app/, app/onboarding/, app/home/
+- [x] Ficheros base: app/_layout.tsx, app/index.tsx
+- [x] **Onboarding de 5 preguntas funcionando en Samsung Galaxy A32 5G**
+  - step0.tsx → step1.tsx → step2.tsx → step3.tsx → step4.tsx
+  - Barra de progreso, validación mínima 10 caracteres, botón dinámico
+  - Último paso: "Descubrir mi primer Pulse" con spinner de carga
+  - Navegación correcta entre pasos pasando respuestas por parámetros
+- [x] Pantalla Home base: "Pulse / Tu conexión llega a las 18:00"
+- [x] Build final del onboarding — APK: https://expo.dev/accounts/pulse-app73/projects/pulse-mobile/builds/052c684e-fd13-4f6c-83b2-098150d4f62e
 
-### MVP visual completo — todas las pantallas funcionando
-- [x] Onboarding 5 preguntas con barra de progreso y validación
-- [x] Home con match simulado, stats, contador 72h y botón de conversación
-- [x] Chat con burbujas de mensajes propios y ajenos
-- [x] Contactos con avatares generativos y lista
-- [x] Cápsula semanal con visual generativo y selector de semanas
-- [x] Perfil con DepthMeter animado, stats y acciones
-
-### Próximo paso — conectar backend real
-- [ ] Crear proyecto en Supabase
-- [ ] Añadir autenticación (registro + login)
-- [ ] Conectar onboarding a Supabase Edge Function
-- [ ] Match del día real desde base de datos
-- [ ] Chat en tiempo real con Supabase Realtime
-- [ ] Matching engine desplegado en Railway
-- [ ] Notificaciones push reales
+### Próximo paso — continuar pantallas
+- [ ] Home real con match del día (perfil anónimo + botón empezar conversación)
+- [ ] Chat screen con mensajes y contador de 72h
+- [ ] Contactos guardados
+- [ ] Cápsula semanal con visual SVG
+- [ ] Perfil con DepthMeter
+- [ ] Autenticación con Supabase (registro + login)
+- [ ] Conectar onboarding real a Supabase Edge Function
+- [ ] Verificación de integración end-to-end (verify-integration.ts)
+- [ ] Auditoría de seguridad (security-audit.ts)
 - [ ] Prueba del equipo en dispositivos reales
-
-### Notas de desarrollo
-- Builds gratuitos EAS agotados hasta el 1 de mayo de 2026
-- Usar `npx expo start` + Expo Go para desarrollo hasta entonces
-- Comando para arrancar: `cd C:\Users\slope\pulse-mobile && npx expo start`
 
 ### Problemas resueltos durante el setup
 - AVG bloqueaba escritura de package-lock.json → mover proyecto a C:\Users\Javi\proyectos\ y añadir a exclusiones de AVG
@@ -462,23 +457,11 @@ Máquina:        Windows (C:\Users\Javi\proyectos\pulse-mobile)
 Node.js:        v24.14.1
 EAS CLI:        v18.6.0
 Git:            v2.53.0.windows.2
-GitHub:         https://github.com/SLH73/pulse-mobile (privado)
-GitHub usuario: SLH73
 Expo account:   pulse-app73
 Project ID:     0eeaa082-4aeb-47df-9699-f30d621983fb
 Dispositivo:    Samsung Galaxy A32 5G (Android)
 App package:    com.pulseapp73.pulsemobile
 AVG Antivirus:  añadir C:\Users\Javi\proyectos a exclusiones para evitar bloqueos npm
-```
-
-### Cómo continuar desde otro PC
-```bash
-git clone https://github.com/SLH73/pulse-mobile.git
-cd pulse-mobile
-npm install --legacy-peer-deps
-npm install -g eas-cli
-eas login  # usuario: pulse-app73
-eas build --platform android --profile preview --non-interactive
 ```
 
 ---

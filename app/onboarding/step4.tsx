@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { supabase } from '../../src/lib/supabase';
 
 const QUESTIONS = ["¿Qué canción escuchas cuando nadie te ve?","¿Cuándo fue la última vez que reíste de verdad? ¿Qué pasó?","¿Qué es algo que te importa mucho pero que casi nadie sabe de ti?","¿Qué harías mañana si supieras que nadie te va a juzgar?","Describe el mejor momento de los últimos 6 meses en tres palabras."];
 
@@ -15,11 +16,37 @@ export default function Step4() {
   const handleFinish = async () => {
     if (!canContinue) return;
     setIsSubmitting(true);
-    const answers = [decodeURIComponent(params.a0 as string),decodeURIComponent(params.a1 as string),decodeURIComponent(params.a2 as string),decodeURIComponent(params.a3 as string),answer.trim()];
-    console.log('Respuestas:', answers);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    setIsSubmitting(false);
-    router.replace('/home');
+
+    const answers = [
+      decodeURIComponent(params.a0 as string),
+      decodeURIComponent(params.a1 as string),
+      decodeURIComponent(params.a2 as string),
+      decodeURIComponent(params.a3 as string),
+      answer.trim(),
+    ];
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No hay sesión activa');
+
+      // Guardar perfil del usuario en Supabase
+      const { error } = await supabase
+        .from('users')
+        .upsert({
+          id: user.id,
+          email: user.email!,
+          onboarding_complete: true,
+        });
+
+      if (error) throw error;
+
+      router.replace('/home');
+    } catch (e: any) {
+      console.error('Error guardando onboarding:', e.message);
+      router.replace('/home');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

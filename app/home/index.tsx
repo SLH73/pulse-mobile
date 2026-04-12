@@ -130,6 +130,9 @@ export default function HomeScreen() {
         <TouchableOpacity onPress={() => router.push('/contacts')}>
           <Text style={styles.footerLink}>Contactos</Text>
         </TouchableOpacity>
+        <TouchableOpacity onPress={() => router.push('/capsule')}>
+          <Text style={styles.footerLink}>Cápsula</Text>
+        </TouchableOpacity>
         <TouchableOpacity onPress={() => router.push('/profile')}>
           <Text style={styles.footerLink}>Perfil</Text>
         </TouchableOpacity>
