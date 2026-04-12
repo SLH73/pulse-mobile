@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -10,37 +10,100 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { supabase } from '../../src/lib/supabase';
 
 interface Message {
   id: string;
-  text: string;
-  isOwn: boolean;
-  time: string;
+  content: string;
+  sender_id: string;
+  created_at: string;
 }
 
 export default function ChatScreen() {
-  const { id } = useLocalSearchParams();
+  const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: '¡Hola! Soy tu Pulse de hoy.',
-      isOwn: false,
-      time: 'ahora',
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
+  const [userId, setUserId] = useState<string | null>(null);
+  const listRef = useRef<FlatList>(null);
 
-  const sendMessage = () => {
+  // Obtener usuario actual
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setUserId(user.id);
+    });
+  }, []);
+
+  // Cargar mensajes iniciales
+  useEffect(() => {
+    if (!id) return;
+
+    // Si el id es del mock (contactos simulados) mostrar mensaje de bienvenida
+    if (id === '1' || id === '2' || id === '3') {
+      setMessages([{
+        id: '1',
+        content: '¡Hola! Soy tu Pulse de hoy.',
+        sender_id: 'other',
+        created_at: new Date().toISOString(),
+      }]);
+      return;
+    }
+
+    // Cargar mensajes reales de Supabase
+    supabase
+      .from('messages')
+      .select('*')
+      .eq('match_id', id)
+      .order('created_at', { ascending: true })
+      .then(({ data }) => {
+        if (data) setMessages(data);
+      });
+
+    // Suscripción Realtime
+    const channel = supabase
+      .channel(`messages:${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `match_id=eq.${id}`,
+        },
+        (payload) => {
+          setMessages(prev => [...prev, payload.new as Message]);
+          setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [id]);
+
+  const sendMessage = async () => {
     const text = draft.trim();
-    if (!text) return;
-    setMessages(prev => [...prev, {
-      id: Date.now().toString(),
-      text,
-      isOwn: true,
-      time: 'ahora',
-    }]);
+    if (!text || !userId) return;
     setDraft('');
+
+    // Si es un match simulado, añadir localmente
+    if (id === '1' || id === '2' || id === '3') {
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        content: text,
+        sender_id: userId,
+        created_at: new Date().toISOString(),
+      }]);
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+      return;
+    }
+
+    // Enviar mensaje real a Supabase
+    await supabase.from('messages').insert({
+      match_id: id,
+      sender_id: userId,
+      content: text,
+      expires_at: new Date(Date.now() + 72 * 3600 * 1000).toISOString(),
+    });
   };
 
   return (
@@ -48,8 +111,7 @@ export default function ChatScreen() {
       style={styles.container}
       behavior="padding"
       keyboardVerticalOffset={80}
->
-      {/* Header */}
+    >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.back}>← Volver</Text>
@@ -57,27 +119,24 @@ export default function ChatScreen() {
         <Text style={styles.timer}>68h restantes</Text>
       </View>
 
-      {/* Mensajes */}
       <FlatList
+        ref={listRef}
         data={messages}
         keyExtractor={m => m.id}
         contentContainerStyle={styles.messageList}
-        renderItem={({ item }) => (
-          <View style={[
-            styles.bubble,
-            item.isOwn ? styles.bubbleOwn : styles.bubbleOther
-          ]}>
-            <Text style={[
-              styles.bubbleText,
-              { color: item.isOwn ? '#0D0D0D' : '#F0F0EE' }
-            ]}>
-              {item.text}
-            </Text>
-          </View>
-        )}
+        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+        renderItem={({ item }) => {
+          const isOwn = item.sender_id === userId;
+          return (
+            <View style={[styles.bubble, isOwn ? styles.bubbleOwn : styles.bubbleOther]}>
+              <Text style={[styles.bubbleText, { color: isOwn ? '#0D0D0D' : '#F0F0EE' }]}>
+                {item.content}
+              </Text>
+            </View>
+          );
+        }}
       />
 
-      {/* Input */}
       <View style={styles.inputRow}>
         <TextInput
           style={styles.input}
@@ -111,10 +170,7 @@ const styles = StyleSheet.create({
   back: { fontSize: 15, color: '#7F77DD' },
   timer: { fontSize: 13, color: '#5F5E5A' },
   messageList: { padding: 16, gap: 12 },
-  bubble: {
-    maxWidth: '80%', borderRadius: 16,
-    padding: 12,
-  },
+  bubble: { maxWidth: '80%', borderRadius: 16, padding: 12 },
   bubbleOwn: {
     backgroundColor: '#7F77DD',
     alignSelf: 'flex-end',

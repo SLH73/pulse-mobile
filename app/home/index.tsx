@@ -11,7 +11,7 @@ import {
 
 // Datos simulados del match — aquí irá Supabase
 const MOCK_MATCH = {
-  id: 'match-001',
+  id: '1',
   expires_at: new Date(Date.now() + 68 * 3600 * 1000).toISOString(),
   match_profile: {
     depth_score: 3,
