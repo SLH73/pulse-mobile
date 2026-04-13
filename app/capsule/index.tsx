@@ -1,3 +1,4 @@
+import React from 'react';
 import { useRouter } from 'expo-router';
 import { ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -16,9 +17,7 @@ function seededRandom(seed: string, index: number): number {
   return (Math.abs(h) % 1000) / 1000;
 }
 
-function CapsuleVisual({ seed, conversations, savedContacts }: {
-  seed: string; conversations: number; savedContacts: number;
-}) {
+function CapsuleVisual({ seed, conversations, savedContacts }: { seed: string; conversations: number; savedContacts: number; }) {
   const baseHue = Math.floor(seededRandom(seed, 0) * 360);
   const circles = Array.from({ length: Math.min(conversations, 6) }, (_, i) => ({
     size: 20 + seededRandom(seed, i + 1) * 40,
@@ -31,36 +30,7 @@ function CapsuleVisual({ seed, conversations, savedContacts }: {
   return (
     <View style={visual.container}>
       {circles.map((c, i) => (
-        <View
-          key={i}
-          style={[
-            visual.circle,
-            {
-              width: c.size,
-              height: c.size,
-              borderRadius: c.size / 2,
-              backgroundColor: `hsl(${c.hue}, 60%, 55%)`,
-              opacity: c.opacity,
-              left: `${c.x}%`,
-              top: `${c.y}%`,
-            },
-          ]}
-        />
-      ))}
-      {Array.from({ length: Math.min(savedContacts, 3) }, (_, i) => (
-        <View
-          key={`line-${i}`}
-          style={[
-            visual.line,
-            {
-              left: `${20 + seededRandom(seed, i + 40) * 60}%`,
-              top: `${20 + seededRandom(seed, i + 50) * 60}%`,
-              width: 40 + seededRandom(seed, i + 60) * 60,
-              transform: [{ rotate: `${seededRandom(seed, i + 70) * 180}deg` }],
-              backgroundColor: `hsl(${(baseHue + 120) % 360}, 50%, 55%)`,
-            },
-          ]}
-        />
+        <View key={i} style={[visual.circle, { width: c.size, height: c.size, borderRadius: c.size / 2, backgroundColor: `hsl(${c.hue}, 60%, 55%)`, opacity: c.opacity, left: `${c.x}%`, top: `${c.y}%` }]} />
       ))}
     </View>
   );
@@ -84,76 +54,34 @@ export default function CapsuleScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
-      <Text style={styles.title}>Cápsula</Text>
-
-      {/* Selector de semanas */}
+      <Text style={styles.title}>Capsula</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.weekScroll}>
         {MOCK_CAPSULES.map((c, i) => (
-          <TouchableOpacity
-            key={c.id}
-            style={[styles.weekPill, { backgroundColor: i === selected ? '#7F77DD' : '#1A1A18' }]}
-            onPress={() => setSelected(i)}
-          >
-            <Text style={[styles.weekPillText, { color: i === selected ? '#0D0D0D' : '#5F5E5A' }]}>
+          <View key={c.id} style={[styles.weekPill, { backgroundColor: i === selected ? '#7F77DD' : '#1A1A18' }]}>
+            <Text style={[styles.weekPillText, { color: i === selected ? '#0D0D0D' : '#5F5E5A' }]} onPress={() => setSelected(i)}>
               {formatWeek(c.week_start)}
             </Text>
-          </TouchableOpacity>
+          </View>
         ))}
       </ScrollView>
-
-      {/* Visual de la cápsula */}
       <View style={styles.card}>
         <Text style={styles.cardLabel}>Semana del {formatWeek(capsule.week_start)}</Text>
-
-        <CapsuleVisual
-          seed={capsule.seed}
-          conversations={capsule.conversations}
-          savedContacts={capsule.saved_contacts}
-        />
-
-        {/* Stats */}
+        <CapsuleVisual seed={capsule.seed} conversations={capsule.conversations} savedContacts={capsule.saved_contacts} />
         <View style={styles.statsRow}>
-          <View style={styles.stat}>
-            <Text style={styles.statValue}>{capsule.conversations}</Text>
-            <Text style={styles.statLabel}>conversaciones</Text>
-          </View>
-          <View style={styles.stat}>
-            <Text style={styles.statValue}>{capsule.saved_contacts}</Text>
-            <Text style={styles.statLabel}>conexiones</Text>
-          </View>
-          <View style={styles.stat}>
-            <Text style={styles.statValue}>+{capsule.depth_delta}</Text>
-            <Text style={styles.statLabel}>profundidad</Text>
-          </View>
+          <View style={styles.stat}><Text style={styles.statValue}>{capsule.conversations}</Text><Text style={styles.statLabel}>conversaciones</Text></View>
+          <View style={styles.stat}><Text style={styles.statValue}>{capsule.saved_contacts}</Text><Text style={styles.statLabel}>conexiones</Text></View>
+          <View style={styles.stat}><Text style={styles.statValue}>+{capsule.depth_delta}</Text><Text style={styles.statLabel}>profundidad</Text></View>
         </View>
-
-        <TouchableOpacity style={styles.shareBtn} onPress={handleShare}>
-          <Text style={styles.shareBtnText}>Compartir cápsula</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.hint}>
-          El visual es único para esta semana.{'\n'}No contiene el texto de tus conversaciones.
-        </Text>
+        <View style={styles.shareBtn} onTouchEnd={handleShare}><Text style={styles.shareBtnText}>Compartir capsula</Text></View>
       </View>
-
-      <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-        <Text style={styles.backText}>← Volver</Text>
-      </TouchableOpacity>
+      <Text style={styles.backText} onPress={() => router.back()}>Volver</Text>
     </ScrollView>
   );
 }
 
-import React from 'react';
-
 const visual = StyleSheet.create({
-  container: {
-    width: '100%', height: 200,
-    backgroundColor: '#0D0D0D',
-    borderRadius: 12, overflow: 'hidden',
-    marginBottom: 20, position: 'relative',
-  },
+  container: { width: '100%', height: 200, backgroundColor: '#0D0D0D', borderRadius: 12, overflow: 'hidden', marginBottom: 20, position: 'relative' },
   circle: { position: 'absolute' },
-  line: { position: 'absolute', height: 2, opacity: 0.6 },
 });
 
 const styles = StyleSheet.create({
@@ -161,32 +89,15 @@ const styles = StyleSheet.create({
   scroll: { padding: 24, paddingTop: 48, paddingBottom: 48 },
   title: { fontSize: 28, fontWeight: '500', color: '#F0F0EE', marginBottom: 20 },
   weekScroll: { marginBottom: 20 },
-  weekPill: {
-    paddingHorizontal: 16, paddingVertical: 8,
-    borderRadius: 99, marginRight: 8,
-    borderWidth: 0.5, borderColor: '#2E2E2C',
-  },
+  weekPill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 99, marginRight: 8, borderWidth: 0.5, borderColor: '#2E2E2C' },
   weekPillText: { fontSize: 13, fontWeight: '500' },
-  card: {
-    backgroundColor: '#1A1A18', borderRadius: 16,
-    padding: 20, borderWidth: 0.5, borderColor: '#2E2E2C',
-    marginBottom: 24,
-  },
+  card: { backgroundColor: '#1A1A18', borderRadius: 16, padding: 20, borderWidth: 0.5, borderColor: '#2E2E2C', marginBottom: 24 },
   cardLabel: { fontSize: 13, color: '#5F5E5A', marginBottom: 16 },
   statsRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-  stat: {
-    flex: 1, backgroundColor: '#0D0D0D',
-    borderRadius: 10, padding: 12,
-  },
+  stat: { flex: 1, backgroundColor: '#0D0D0D', borderRadius: 10, padding: 12 },
   statValue: { fontSize: 20, fontWeight: '500', color: '#F0F0EE', marginBottom: 4 },
   statLabel: { fontSize: 11, color: '#5F5E5A' },
-  shareBtn: {
-    backgroundColor: '#1D1D3A', borderRadius: 12,
-    padding: 14, alignItems: 'center', marginBottom: 12,
-    borderWidth: 0.5, borderColor: '#7F77DD',
-  },
+  shareBtn: { backgroundColor: '#1D1D3A', borderRadius: 12, padding: 14, alignItems: 'center', marginBottom: 12, borderWidth: 0.5, borderColor: '#7F77DD' },
   shareBtnText: { fontSize: 15, color: '#7F77DD', fontWeight: '500' },
-  hint: { fontSize: 12, color: '#444441', textAlign: 'center', lineHeight: 18 },
-  backBtn: { marginTop: 8 },
-  backText: { fontSize: 15, color: '#7F77DD' },
+  backText: { fontSize: 15, color: '#7F77DD', marginTop: 8 },
 });

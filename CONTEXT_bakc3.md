@@ -426,36 +426,20 @@ MODEL_NAME=paraphrase-multilingual-mpnet-base-v2
 - [x] Cápsula semanal con visual generativo y selector de semanas
 - [x] Perfil con DepthMeter animado, stats y acciones
 
-### Completado — Backend conectado
-- [x] Cuenta Supabase creada — proyecto: pulse-mobile
-- [x] Project ID: ynjszpegtmtemckwgovr
-- [x] Project URL: https://ynjszpegtmtemckwgovr.supabase.co
-- [x] Publishable key: sb_publishable_CG8y4ZhlRKyQSFRqH8Fw4A_kbUAw0xe
-- [x] Tablas creadas: users, daily_matches, messages, saved_contacts
-- [x] RLS activado en todas las tablas
-- [x] Autenticación email funcionando (confirm email desactivado para dev)
-- [x] Registro → Onboarding → datos guardados en tabla users ✓
-- [x] Cliente Supabase en src/lib/supabase.ts
-- [x] Variables de entorno en .env.local
-
-### Próximo paso — datos reales
-- [x] Chat en tiempo real con Supabase Realtime ✓
-- [x] Match del día real entre dos usuarios reales ✓
-- [x] Contactos reales desde tabla saved_contacts ✓
-- [x] Botón "Guardar" en chat funcional ✓
-- [x] increment_depth_score función en Supabase ✓
-- [ ] Notificaciones push reales (18:00 diarias)
-- [ ] Prueba del equipo en dispositivos reales
+### Próximo paso — conectar backend real
+- [ ] Crear proyecto en Supabase
+- [ ] Añadir autenticación (registro + login)
+- [ ] Conectar onboarding a Supabase Edge Function
+- [ ] Match del día real desde base de datos
+- [ ] Chat en tiempo real con Supabase Realtime
 - [ ] Matching engine desplegado en Railway
+- [ ] Notificaciones push reales
+- [ ] Prueba del equipo en dispositivos reales
 
-### Credenciales Supabase
-```
-Project ID:      ynjszpegtmtemckwgovr
-URL:             https://ynjszpegtmtemckwgovr.supabase.co
-Publishable key: sb_publishable_CG8y4ZhlRKyQSFRqH8Fw4A_kbUAw0xe
-Organización:    Pulse App
-Plan:            Free
-```
+### Notas de desarrollo
+- Builds gratuitos EAS agotados hasta el 1 de mayo de 2026
+- Usar `npx expo start` + Expo Go para desarrollo hasta entonces
+- Comando para arrancar: `cd C:\Users\slope\pulse-mobile && npx expo start`
 
 ### Problemas resueltos durante el setup
 - AVG bloqueaba escritura de package-lock.json → mover proyecto a C:\Users\Javi\proyectos\ y añadir a exclusiones de AVG
