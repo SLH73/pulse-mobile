@@ -19,6 +19,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [birthYear, setBirthYear] = useState('');
+  const [parentEmail, setParentEmail] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -37,11 +38,18 @@ export default function LoginScreen() {
     }
   };
 
-  const validateAge = (): boolean => {
+  const getAge = (): number => {
     const year = parseInt(birthYear);
-    const currentYear = new Date().getFullYear();
-    const age = currentYear - year;
+    return new Date().getFullYear() - year;
+  };
+
+  const validateAge = (): boolean => {
+    const age = getAge();
     return age >= 13 && age <= 19;
+  };
+
+  const needsParentalConsent = (): boolean => {
+    return birthYear.length === 4 && getAge() < 14;
   };
 
   const handleAuth = async () => {
@@ -50,15 +58,19 @@ export default function LoginScreen() {
 
     if (isSignUp) {
       if (!birthYear || birthYear.length !== 4) {
-        setError('Introduce tu año de nacimiento (ej: 2008)');
+        setError('Introduce tu ano de nacimiento (ej: 2008)');
         return;
       }
       if (!validateAge()) {
-        setError('Pulse es para personas de 13 a 19 años.');
+        setError('Pulse es para personas de 13 a 19 anos.');
         return;
       }
       if (!acceptedTerms || !acceptedPrivacy) {
         setError('Debes aceptar los terminos y la politica de privacidad.');
+        return;
+      }
+      if (needsParentalConsent() && !parentEmail) {
+        setError('Al tener menos de 14 anos necesitas el email de un padre o tutor.');
         return;
       }
     }
@@ -69,6 +81,9 @@ export default function LoginScreen() {
       if (isSignUp) {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
+        if (needsParentalConsent() && parentEmail) {
+          console.log('Consentimiento parental requerido para:', parentEmail);
+        }
         await setupNotifications();
         router.replace('/onboarding/step0');
       } else {
@@ -89,15 +104,10 @@ export default function LoginScreen() {
     : email && password && !loading;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>Pulse</Text>
-        <Text style={styles.subtitle}>
-          {isSignUp ? 'Crea tu cuenta' : 'Bienvenido de vuelta'}
-        </Text>
+        <Text style={styles.subtitle}>{isSignUp ? 'Crea tu cuenta' : 'Bienvenido de vuelta'}</Text>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -106,7 +116,7 @@ export default function LoginScreen() {
           keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
 
         <TextInput style={styles.input} value={password} onChangeText={setPassword}
-          placeholder="Contraseña" placeholderTextColor="#444441" secureTextEntry />
+          placeholder="Contrasena" placeholderTextColor="#444441" secureTextEntry />
 
         {isSignUp && (
           <>
@@ -114,43 +124,53 @@ export default function LoginScreen() {
               style={styles.input}
               value={birthYear}
               onChangeText={setBirthYear}
-              placeholder="Año de nacimiento (ej: 2008)"
+              placeholder="Ano de nacimiento (ej: 2008)"
               placeholderTextColor="#444441"
               keyboardType="numeric"
               maxLength={4}
             />
 
-            <TouchableOpacity
-              style={styles.checkRow}
-              onPress={() => setAcceptedTerms(!acceptedTerms)}
-            >
+            {needsParentalConsent() && (
+              <View style={styles.parentalBox}>
+                <Text style={styles.parentalTitle}>Consentimiento parental requerido</Text>
+                <Text style={styles.parentalText}>
+                  Al tener menos de 14 anos, necesitamos el email de tu padre, madre o tutor legal.
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  value={parentEmail}
+                  onChangeText={setParentEmail}
+                  placeholder="Email del padre/madre/tutor"
+                  placeholderTextColor="#444441"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+            )}
+
+            <TouchableOpacity style={styles.checkRow} onPress={() => setAcceptedTerms(!acceptedTerms)}>
               <View style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}>
-                {acceptedTerms && <Text style={styles.checkmark}>✓</Text>}
+                {acceptedTerms && <Text style={styles.checkmark}>v</Text>}
               </View>
               <Text style={styles.checkLabel}>
                 Acepto los{' '}
-                <Text style={styles.link} onPress={() => router.push('/legal/terms')}>términos y condiciones</Text>
+                <Text style={styles.link} onPress={() => router.push('/legal/terms')}>terminos y condiciones</Text>
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.checkRow}
-              onPress={() => setAcceptedPrivacy(!acceptedPrivacy)}
-            >
+            <TouchableOpacity style={styles.checkRow} onPress={() => setAcceptedPrivacy(!acceptedPrivacy)}>
               <View style={[styles.checkbox, acceptedPrivacy && styles.checkboxChecked]}>
-                {acceptedPrivacy && <Text style={styles.checkmark}>✓</Text>}
+                {acceptedPrivacy && <Text style={styles.checkmark}>v</Text>}
               </View>
               <Text style={styles.checkLabel}>
                 Acepto la{' '}
-                <Text style={styles.link} onPress={() => router.push('/legal/privacy')}>política de privacidad</Text>
+                <Text style={styles.link} onPress={() => router.push('/legal/privacy')}>politica de privacidad</Text>
               </Text>
             </TouchableOpacity>
 
             <View style={styles.gdprBox}>
               <Text style={styles.gdprText}>
-                Pulse cumple con el RGPD y la LOPD. Tus datos nunca se venden
-                ni se comparten con terceros. Si tienes menos de 14 años,
-                necesitas el consentimiento de tus padres.
+                Pulse cumple con el RGPD y la LOPD. Tus datos nunca se venden ni se comparten con terceros.
               </Text>
             </View>
           </>
@@ -169,9 +189,7 @@ export default function LoginScreen() {
 
         <TouchableOpacity onPress={() => { setIsSignUp(!isSignUp); setError(''); }}>
           <Text style={styles.switchText}>
-            {isSignUp
-              ? 'Ya tienes cuenta? Inicia sesion'
-              : 'No tienes cuenta? Registrate'}
+            {isSignUp ? 'Ya tienes cuenta? Inicia sesion' : 'No tienes cuenta? Registrate'}
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -205,6 +223,12 @@ const styles = StyleSheet.create({
     marginBottom: 20, borderWidth: 0.5, borderColor: '#2E2E2C',
   },
   gdprText: { fontSize: 12, color: '#5F5E5A', lineHeight: 18 },
+  parentalBox: {
+    backgroundColor: '#1D1010', borderRadius: 12, padding: 16,
+    marginBottom: 16, borderWidth: 0.5, borderColor: '#E24B4A',
+  },
+  parentalTitle: { fontSize: 14, fontWeight: '500', color: '#E24B4A', marginBottom: 8 },
+  parentalText: { fontSize: 12, color: '#888780', lineHeight: 18, marginBottom: 12 },
   btn: {
     backgroundColor: '#7F77DD', borderRadius: 12,
     padding: 16, alignItems: 'center', marginBottom: 16, marginTop: 8,
