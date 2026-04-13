@@ -446,7 +446,7 @@ MODEL_NAME=paraphrase-multilingual-mpnet-base-v2
 - [x] increment_depth_score función en Supabase ✓
 - [x] Notificaciones locales diarias a las 18:00 ✓
 - [ ] Notificaciones push remotas (servidor → móvil)
-- [x] Prueba del equipo completada ✓ — chat bidireccional verificado entre test2 y test3
+- [ ] Prueba del equipo en dispositivos reales
 - [x] Matching engine desplegado en Railway ✓
   - URL: https://pulse-matching-engine-production.up.railway.app
   - GitHub: https://github.com/SLH73/pulse-matching-engine
