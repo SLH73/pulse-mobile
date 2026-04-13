@@ -444,16 +444,9 @@ MODEL_NAME=paraphrase-multilingual-mpnet-base-v2
 - [x] Contactos reales desde tabla saved_contacts ✓
 - [x] Botón "Guardar" en chat funcional ✓
 - [x] increment_depth_score función en Supabase ✓
-- [x] Notificaciones locales diarias a las 18:00 ✓
-- [ ] Notificaciones push remotas (servidor → móvil)
+- [ ] Notificaciones push reales (18:00 diarias)
 - [ ] Prueba del equipo en dispositivos reales
-- [x] Matching engine desplegado en Railway ✓
-  - URL: https://pulse-matching-engine-production.up.railway.app
-  - GitHub: https://github.com/SLH73/pulse-matching-engine
-
-### Problema resuelto — Expo Go
-- Expo Go no cargaba → móvil y ordenador estaban en redes WiFi diferentes
-- Solución: conectar ambos a la misma red WiFi
+- [ ] Matching engine desplegado en Railway
 
 ### Credenciales Supabase
 ```
