@@ -1,7 +1,7 @@
 import React from 'react';
 import { useRouter } from 'expo-router';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../src/lib/supabase';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const DEPTH_LEVELS = [
   { min: 0,  label: 'Explorando',   color: '#888780' },
@@ -32,7 +32,37 @@ export default function ProfileScreen() {
     await supabase.auth.signOut();
     router.replace('/auth/login');
   };
+  
+  const handleDeleteAccount = async () => {
+    Alert.alert(
+      'Eliminar cuenta',
+      'Esta accion es irreversible. Se eliminaran todos tus datos permanentemente en 30 dias. Deseas continuar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (!user) return;
 
+              // Marcar cuenta para eliminacion
+              await supabase
+                .from('users')
+                .update({ deletion_requested_at: new Date().toISOString() })
+                .eq('id', user.id);
+
+              await supabase.auth.signOut();
+              router.replace('/auth/login');
+            } catch (e) {
+              Alert.alert('Error', 'No se pudo eliminar la cuenta. Intenta de nuevo.');
+            }
+          },
+        },
+      ]
+    );
+  };
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
       <Text style={styles.title}>Perfil</Text>
@@ -77,6 +107,11 @@ export default function ProfileScreen() {
 
       <TouchableOpacity style={styles.actionRow} onPress={() => router.push('/legal/privacy')}>
         <Text style={styles.actionText}>Política de privacidad</Text>
+        <Text style={styles.actionArrow}>›</Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity style={styles.actionRow} onPress={handleDeleteAccount}>
+        <Text style={[styles.actionText, { color: '#E24B4A' }]}>Eliminar mi cuenta</Text>
         <Text style={styles.actionArrow}>›</Text>
       </TouchableOpacity>
 
