@@ -10,7 +10,9 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         const inAuth = segments[0] === 'auth';
-        if (!session && !inAuth) {
+        const inLegal = segments[0] === 'legal';
+
+        if (!session && !inAuth && !inLegal) {
           router.replace('/auth/login');
         } else if (session && inAuth) {
           router.replace('/home');
