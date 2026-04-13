@@ -129,7 +129,7 @@ export default function LoginScreen() {
               </View>
               <Text style={styles.checkLabel}>
                 Acepto los{' '}
-                <Text style={styles.link}>términos y condiciones</Text>
+                <Text style={styles.link} onPress={() => router.push('/legal/terms')}>términos y condiciones</Text>
               </Text>
             </TouchableOpacity>
 
@@ -142,7 +142,7 @@ export default function LoginScreen() {
               </View>
               <Text style={styles.checkLabel}>
                 Acepto la{' '}
-                <Text style={styles.link}>política de privacidad</Text>
+                <Text style={styles.link} onPress={() => router.push('/legal/privacy')}>política de privacidad</Text>
               </Text>
             </TouchableOpacity>
 

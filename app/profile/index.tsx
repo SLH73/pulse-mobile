@@ -75,7 +75,7 @@ export default function ProfileScreen() {
         <Text style={styles.actionArrow}>›</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.actionRow}>
+      <TouchableOpacity style={styles.actionRow} onPress={() => router.push('/legal/privacy')}>
         <Text style={styles.actionText}>Política de privacidad</Text>
         <Text style={styles.actionArrow}>›</Text>
       </TouchableOpacity>

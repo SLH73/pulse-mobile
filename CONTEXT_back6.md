@@ -445,13 +445,7 @@ MODEL_NAME=paraphrase-multilingual-mpnet-base-v2
 - [x] Botón "Guardar" en chat funcional ✓
 - [x] increment_depth_score función en Supabase ✓
 - [x] Notificaciones locales diarias a las 18:00 ✓
-- [x] Verificacion de edad (13-19 anos) en registro ✓
-- [x] Aceptacion de terminos y condiciones ✓
-- [x] Aviso GDPR/LOPD en registro ✓
-- [ ] Politica de privacidad completa (texto legal)
-- [ ] Boton eliminar cuenta y datos
-- [ ] Consentimiento parental menores de 14
-- [ ] Notificaciones push remotas (servidor → movil)
+- [ ] Notificaciones push remotas (servidor → móvil)
 - [x] Prueba del equipo completada ✓ — chat bidireccional verificado entre test2 y test3
 - [x] Matching engine desplegado en Railway ✓
   - URL: https://pulse-matching-engine-production.up.railway.app
