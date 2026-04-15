@@ -10,6 +10,10 @@ import {
 } from 'react-native';
 import { supabase } from '../../src/lib/supabase';
 
+// ────────────────────────────────────────────────────────────
+// Tipos
+// ────────────────────────────────────────────────────────────
+
 interface Match {
   match_id: string;
   match_user_id: string;
@@ -22,6 +26,15 @@ interface Match {
   };
 }
 
+interface UserMood {
+  daily_mood: string | null;
+  mood_updated_at: string | null;
+}
+
+// ────────────────────────────────────────────────────────────
+// Helpers
+// ────────────────────────────────────────────────────────────
+
 function hoursUntil(iso: string): number {
   const diff = new Date(iso).getTime() - Date.now();
   return Math.max(0, Math.floor(diff / 3_600_000));
@@ -32,15 +45,41 @@ function formatMemberSince(iso: string): string {
   return d.toLocaleDateString('es', { month: 'long', year: 'numeric' });
 }
 
+// ¿El mood fue registrado hoy?
+function moodIsFromToday(updatedAt: string | null): boolean {
+  if (!updatedAt) return false;
+  const updated = new Date(updatedAt);
+  const now     = new Date();
+  return (
+    updated.getFullYear() === now.getFullYear() &&
+    updated.getMonth()    === now.getMonth()    &&
+    updated.getDate()     === now.getDate()
+  );
+}
+
+// Etiqueta legible del mood
+function moodLabel(mood: string | null): string {
+  if (mood === 'listen') return '👂 Necesito escuchar';
+  if (mood === 'talk')   return '💬 Quiero hablar';
+  if (mood === 'rest')   return '🌙 Solo estar';
+  return '';
+}
+
+// ────────────────────────────────────────────────────────────
+// Componente
+// ────────────────────────────────────────────────────────────
+
 export default function HomeScreen() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [match, setMatch] = useState<Match | null>(null);
+
+  const [loading, setLoading]   = useState(true);
+  const [match, setMatch]       = useState<Match | null>(null);
   const [hoursLeft, setHoursLeft] = useState(0);
-  const [error, setError] = useState('');
+  const [error, setError]       = useState('');
+  const [mood, setMood]         = useState<string | null>(null);
 
   useEffect(() => {
-    loadMatch();
+    checkMoodThenLoad();
   }, []);
 
   useEffect(() => {
@@ -51,7 +90,8 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, [match]);
 
-  const loadMatch = async () => {
+  // ── Comprobar mood antes de cargar el match ──────────────
+  const checkMoodThenLoad = async () => {
     setLoading(true);
     setError('');
 
@@ -62,16 +102,51 @@ export default function HomeScreen() {
         return;
       }
 
-      // Llamar a la función de Supabase
+      // Leer mood del usuario
+      const { data: userData } = await supabase
+        .from('users')
+        .select('daily_mood, mood_updated_at')
+        .eq('id', user.id)
+        .single();
+
+      const userMood = userData as UserMood | null;
+
+      // Si el mood de hoy NO está registrado → ir a pantalla de mood
+      if (!moodIsFromToday(userMood?.mood_updated_at ?? null)) {
+        router.replace('/mood');
+        return;
+      }
+
+      // Mood ya registrado hoy → guardar para mostrar en UI
+      setMood(userMood?.daily_mood ?? null);
+
+      // Cargar el match normalmente
+      await loadMatch(user.id);
+
+    } catch (e: any) {
+      setError('Error cargando datos: ' + e.message);
+      setLoading(false);
+    }
+  };
+
+  // ── Cargar match del día ─────────────────────────────────
+  const loadMatch = async (userId?: string) => {
+    try {
+      let uid = userId;
+      if (!uid) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { router.replace('/auth/login'); return; }
+        uid = user.id;
+      }
+
       const { data, error } = await supabase
-        .rpc('get_today_match', { p_user_id: user.id });
+        .rpc('get_today_match', { p_user_id: uid });
 
       if (error) throw error;
 
       if (data && data.length > 0) {
         const matchData = data[0];
 
-        // Obtener perfil del match
         const { data: profile } = await supabase
           .from('users')
           .select('depth_score, city, created_at')
@@ -95,6 +170,15 @@ export default function HomeScreen() {
     }
   };
 
+  // ── Refrescar mood (botón en UI) ─────────────────────────
+  const changeMood = () => {
+    router.push('/mood');
+  };
+
+  // ────────────────────────────────────────────────────────
+  // Render
+  // ────────────────────────────────────────────────────────
+
   if (loading) {
     return (
       <View style={styles.loader}>
@@ -106,18 +190,28 @@ export default function HomeScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
 
+      {/* CABECERA */}
       <View style={styles.header}>
-        <Text style={styles.greeting}>Tu conexión de hoy</Text>
+        <Text style={styles.greeting}>Tu conexion de hoy</Text>
         <Text style={styles.title}>Pulse</Text>
+
+        {/* Mood del día */}
+        {mood && (
+          <TouchableOpacity style={styles.moodBadge} onPress={changeMood}>
+            <Text style={styles.moodBadgeText}>{moodLabel(mood)}</Text>
+            <Text style={styles.moodBadgeChange}>Cambiar</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {error ? (
         <Text style={styles.errorText}>{error}</Text>
       ) : null}
 
+      {/* MATCH CARD */}
       {match ? (
         <View style={styles.matchCard}>
-          <Text style={styles.matchLabel}>Alguien te está esperando</Text>
+          <Text style={styles.matchLabel}>Alguien te esta esperando</Text>
 
           <View style={styles.statsRow}>
             <View style={styles.stat}>
@@ -144,11 +238,11 @@ export default function HomeScreen() {
 
           <View style={[
             styles.timerRow,
-            { backgroundColor: hoursLeft < 6 ? '#2A1010' : '#1A1A18' }
+            { backgroundColor: hoursLeft < 6 ? '#2A1010' : '#1A1A18' },
           ]}>
             <Text style={[
               styles.timerText,
-              { color: hoursLeft < 6 ? '#E24B4A' : '#5F5E5A' }
+              { color: hoursLeft < 6 ? '#E24B4A' : '#5F5E5A' },
             ]}>
               {hoursLeft}h restantes
             </Text>
@@ -158,31 +252,34 @@ export default function HomeScreen() {
             style={styles.startBtn}
             onPress={() => router.push(`/chat/${match.match_id}`)}
           >
-            <Text style={styles.startBtnText}>Empezar conversación</Text>
+            <Text style={styles.startBtnText}>Empezar conversacion</Text>
           </TouchableOpacity>
         </View>
+
       ) : (
+        // SIN MATCH
         <View style={styles.noMatchCard}>
           <Text style={styles.noMatchTitle}>Tu Pulse llega a las 18:00</Text>
           <Text style={styles.noMatchSubtitle}>
-            Cada día conectamos a las personas en el momento{'\n'}
-            en que más lo necesitan. Vuelve esta tarde.
+            Cada dia conectamos a las personas en el momento{'\n'}
+            en que mas lo necesitan. Vuelve esta tarde.
           </Text>
           <TouchableOpacity
             style={styles.retryBtn}
-            onPress={loadMatch}
+            onPress={() => loadMatch()}
           >
-            <Text style={styles.retryText}>Buscar conexión</Text>
+            <Text style={styles.retryText}>Buscar conexion</Text>
           </TouchableOpacity>
         </View>
       )}
 
+      {/* FOOTER */}
       <View style={styles.footer}>
         <TouchableOpacity onPress={() => router.push('/contacts')}>
           <Text style={styles.footerLink}>Contactos</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => router.push('/capsule')}>
-          <Text style={styles.footerLink}>Cápsula</Text>
+          <Text style={styles.footerLink}>Capsula</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => router.push('/profile')}>
           <Text style={styles.footerLink}>Perfil</Text>
@@ -193,35 +290,68 @@ export default function HomeScreen() {
   );
 }
 
+// ────────────────────────────────────────────────────────────
+// Estilos
+// ────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  loader: { flex: 1, backgroundColor: '#0D0D0D', alignItems: 'center', justifyContent: 'center' },
+  loader: {
+    flex: 1, backgroundColor: '#0D0D0D',
+    alignItems: 'center', justifyContent: 'center',
+  },
   container: { flex: 1, backgroundColor: '#0D0D0D' },
-  scroll: { padding: 24, paddingBottom: 48 },
-  header: { marginBottom: 32 },
-  greeting: { fontSize: 13, color: '#5F5E5A', marginBottom: 4 },
-  title: { fontSize: 32, fontWeight: '500', color: '#F0F0EE' },
+  scroll:    { padding: 24, paddingBottom: 48 },
+
+  // Cabecera
+  header:   { marginBottom: 32, gap: 8 },
+  greeting: { fontSize: 13, color: '#5F5E5A' },
+  title:    { fontSize: 32, fontWeight: '500', color: '#F0F0EE' },
+
+  // Badge de mood
+  moodBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#1A1A18', borderRadius: 20,
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderWidth: 0.5, borderColor: '#2E2E2C',
+    alignSelf: 'flex-start',
+  },
+  moodBadgeText:   { fontSize: 13, color: '#F0F0EE' },
+  moodBadgeChange: { fontSize: 12, color: '#5F5E5A' },
+
   errorText: { fontSize: 13, color: '#E24B4A', marginBottom: 16 },
+
+  // Match card
   matchCard: {
     backgroundColor: '#1A1A18', borderRadius: 16,
     padding: 24, borderWidth: 0.5, borderColor: '#2E2E2C', marginBottom: 24,
   },
   matchLabel: { fontSize: 13, color: '#7F77DD', fontWeight: '500', marginBottom: 20 },
-  statsRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
-  stat: { flex: 1, backgroundColor: '#0D0D0D', borderRadius: 10, padding: 12 },
+  statsRow:   { flexDirection: 'row', gap: 12, marginBottom: 20 },
+  stat: {
+    flex: 1, backgroundColor: '#0D0D0D',
+    borderRadius: 10, padding: 12,
+  },
   statValue: { fontSize: 15, fontWeight: '500', color: '#F0F0EE', marginBottom: 4 },
   statLabel: { fontSize: 11, color: '#5F5E5A' },
-  timerRow: { borderRadius: 8, padding: 10, alignItems: 'center', marginBottom: 20 },
+  timerRow:  { borderRadius: 8, padding: 10, alignItems: 'center', marginBottom: 20 },
   timerText: { fontSize: 13, fontWeight: '500' },
-  startBtn: { backgroundColor: '#7F77DD', borderRadius: 12, padding: 16, alignItems: 'center' },
+  startBtn:  { backgroundColor: '#7F77DD', borderRadius: 12, padding: 16, alignItems: 'center' },
   startBtnText: { fontSize: 16, fontWeight: '500', color: '#0D0D0D' },
+
+  // Sin match
   noMatchCard: {
     backgroundColor: '#1A1A18', borderRadius: 16, padding: 32,
     alignItems: 'center', borderWidth: 0.5, borderColor: '#2E2E2C', marginBottom: 24,
   },
-  noMatchTitle: { fontSize: 20, fontWeight: '500', color: '#F0F0EE', marginBottom: 12, textAlign: 'center' },
+  noMatchTitle:    { fontSize: 20, fontWeight: '500', color: '#F0F0EE', marginBottom: 12, textAlign: 'center' },
   noMatchSubtitle: { fontSize: 15, color: '#5F5E5A', textAlign: 'center', lineHeight: 24, marginBottom: 20 },
-  retryBtn: { backgroundColor: '#1D1D3A', borderRadius: 12, padding: 12, borderWidth: 0.5, borderColor: '#7F77DD' },
+  retryBtn: {
+    backgroundColor: '#1D1D3A', borderRadius: 12, padding: 12,
+    borderWidth: 0.5, borderColor: '#7F77DD',
+  },
   retryText: { fontSize: 14, color: '#7F77DD' },
-  footer: { flexDirection: 'row', justifyContent: 'center', gap: 32, marginTop: 8 },
+
+  // Footer
+  footer:     { flexDirection: 'row', justifyContent: 'center', gap: 32, marginTop: 8 },
   footerLink: { fontSize: 14, color: '#5F5E5A' },
 });
