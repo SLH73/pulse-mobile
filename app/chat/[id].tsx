@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { supabase } from '../../src/lib/supabase';
+import { moderateMessage } from '../../src/lib/moderation';
 
 // ────────────────────────────────────────────────────────────
 // Tipos
@@ -26,7 +27,7 @@ interface Message {
 interface MatchState {
   user_a: string;
   user_b: string;
-  expires_at: string | null;   // null = permanente
+  expires_at: string | null;
   saved_by_a: boolean;
   saved_by_b: boolean;
   mutual_save_count: number;
@@ -50,7 +51,7 @@ function formatTimer(expiresAt: string | null): string {
 function timerIsUrgent(expiresAt: string | null): boolean {
   if (!expiresAt) return false;
   const ms = new Date(expiresAt).getTime() - Date.now();
-  return ms > 0 && ms < 6 * 3_600_000; // menos de 6 horas
+  return ms > 0 && ms < 6 * 3_600_000;
 }
 
 // ────────────────────────────────────────────────────────────
@@ -61,15 +62,17 @@ export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
 
-  const [messages, setMessages]   = useState<Message[]>([]);
-  const [draft, setDraft]         = useState('');
-  const [userId, setUserId]       = useState<string | null>(null);
-  const [match, setMatch]         = useState<MatchState | null>(null);
+  const [messages, setMessages]     = useState<Message[]>([]);
+  const [draft, setDraft]           = useState('');
+  const [userId, setUserId]         = useState<string | null>(null);
+  const [match, setMatch]           = useState<MatchState | null>(null);
   const [timerLabel, setTimerLabel] = useState('...');
-  const [saving, setSaving]       = useState(false);
+  const [saving, setSaving]         = useState(false);
+  const [moderating, setModerating] = useState(false); // spinner mientras modera
+  const [blockedText, setBlockedText] = useState<string | null>(null); // aviso de bloqueo
 
-  const listRef  = useRef<FlatList>(null);
-  const isMock   = MOCK_IDS.includes(id ?? '');
+  const listRef = useRef<FlatList>(null);
+  const isMock  = MOCK_IDS.includes(id ?? '');
 
   // ── Sesión ──────────────────────────────────────────────
   useEffect(() => {
@@ -90,7 +93,6 @@ export default function ChatScreen() {
       return;
     }
 
-    // Datos del match (incluye nuevas columnas)
     supabase
       .from('daily_matches')
       .select('user_a, user_b, expires_at, saved_by_a, saved_by_b, mutual_save_count')
@@ -100,7 +102,6 @@ export default function ChatScreen() {
         if (data) setMatch(data as MatchState);
       });
 
-    // Mensajes iniciales
     supabase
       .from('messages')
       .select('*')
@@ -108,7 +109,6 @@ export default function ChatScreen() {
       .order('created_at', { ascending: true })
       .then(({ data }) => { if (data) setMessages(data); });
 
-    // Realtime — mensajes
     const msgChannel = supabase
       .channel(`messages:${id}`)
       .on('postgres_changes', {
@@ -120,7 +120,6 @@ export default function ChatScreen() {
       })
       .subscribe();
 
-    // Realtime — estado del match (expires_at, saved_by_*, mutual_save_count)
     const matchChannel = supabase
       .channel(`match_state:${id}`)
       .on('postgres_changes', {
@@ -137,23 +136,25 @@ export default function ChatScreen() {
     };
   }, [id, userId]);
 
-  // ── Timer en tiempo real (cada minuto) ──────────────────
+  // ── Timer en tiempo real ─────────────────────────────────
   useEffect(() => {
     if (isMock) { setTimerLabel('72h restantes'); return; }
     if (!match) return;
-
     const tick = () => setTimerLabel(formatTimer(match.expires_at));
     tick();
     const interval = setInterval(tick, 60_000);
     return () => clearInterval(interval);
   }, [match?.expires_at]);
 
-  // ── Enviar mensaje ───────────────────────────────────────
+  // ── Enviar mensaje con moderación ───────────────────────
   const sendMessage = async () => {
     const text = draft.trim();
-    if (!text || !userId) return;
-    setDraft('');
+    if (!text || !userId || moderating) return;
 
+    setDraft('');
+    setBlockedText(null);
+
+    // Mock: sin moderación
     if (isMock) {
       setMessages(prev => [...prev, {
         id: Date.now().toString(), content: text,
@@ -163,6 +164,40 @@ export default function ChatScreen() {
       return;
     }
 
+    // ── Moderación ──────────────────────────────────────────
+    setModerating(true);
+    const modResult = await moderateMessage(text);
+    setModerating(false);
+
+    if (!modResult.approved) {
+      // Mensaje bloqueado — mostrar aviso
+      setBlockedText(
+        `Mensaje bloqueado por ${modResult.reason ?? 'contenido inapropiado'}. ` +
+        'Por favor, mantén un trato respetuoso.'
+      );
+
+      // Si score > 0.9 → insertar flag para revisión manual
+      if (modResult.flag) {
+        const maxScore = Math.max(
+          modResult.scores.toxicity,
+          modResult.scores.threat,
+          modResult.scores.sexually_explicit,
+        );
+        await supabase.from('moderation_flags').insert({
+          user_id:      userId,
+          match_id:     id,
+          content:      text,
+          reason:       modResult.reason ?? 'desconocido',
+          score:        maxScore,
+          auto_flagged: true,
+          reviewed:     false,
+        });
+      }
+
+      return; // No enviar el mensaje
+    }
+
+    // ── Mensaje aprobado → guardar en Supabase ──────────────
     await supabase.from('messages').insert({
       match_id:   id,
       sender_id:  userId,
@@ -171,7 +206,7 @@ export default function ChatScreen() {
     });
   };
 
-  // ── Guardar contacto (extensión mutua) ───────────────────
+  // ── Guardar contacto ─────────────────────────────────────
   const saveContact = async () => {
     if (!userId || !id || isMock || saving) return;
     setSaving(true);
@@ -202,19 +237,15 @@ export default function ChatScreen() {
 
     if (result.status === 'mutual_save') {
       if (result.permanent) {
-        Alert.alert(
-          '¡Conexion permanente!',
-          'Los dos habeis querido seguir. Esta conexion ya no expira.',
-        );
+        Alert.alert('¡Conexion permanente!', 'Los dos habeis querido seguir. Esta conexion ya no expira.');
       } else {
         const extensionsLeft = 3 - result.mutual_save_count;
         Alert.alert(
           '¡Mutuo! Chat extendido 72h',
-          `Los dos habeis guardado la conexion. Quedan ${extensionsLeft} extension${extensionsLeft === 1 ? '' : 'es'} posibles.`,
+          `Quedan ${extensionsLeft} extension${extensionsLeft === 1 ? '' : 'es'} posibles.`,
         );
       }
     } else {
-      // Solo yo he guardado de momento
       Alert.alert(
         'Conexion guardada',
         'Has guardado esta conexion. Si la otra persona tambien guarda, el chat se extiende 72h mas.',
@@ -225,27 +256,29 @@ export default function ChatScreen() {
   // ── Estado derivado ──────────────────────────────────────
   const messageCount = messages.filter(m => m.sender_id === userId).length;
   const isPermanent  = match?.expires_at === null && match?.mutual_save_count > 0;
-
-  // ¿Ya he guardado yo?
-  const iAmA    = match?.user_a === userId;
-  const iSaved  = match ? (iAmA ? match.saved_by_a : match.saved_by_b) : false;
-
-  // ¿El otro ha guardado?
-  const otherSaved = match ? (iAmA ? match.saved_by_b : match.saved_by_a) : false;
-
-  // Puedo guardar si: hay suficientes mensajes, no he guardado aún, no es mock
-  const canSave = !isMock && messageCount >= 3 && !iSaved;
+  const iAmA         = match?.user_a === userId;
+  const iSaved       = match ? (iAmA ? match.saved_by_a : match.saved_by_b) : false;
+  const otherSaved   = match ? (iAmA ? match.saved_by_b : match.saved_by_a) : false;
+  const canSave      = !isMock && messageCount >= 3 && !iSaved;
+  const urgent       = match ? timerIsUrgent(match.expires_at) : false;
 
   // ── Banner dinámico ──────────────────────────────────────
   const renderBanner = () => {
+    // Aviso de moderación (prioridad máxima)
+    if (blockedText) {
+      return (
+        <View style={[styles.banner, styles.bannerBlocked]}>
+          <Text style={styles.bannerTextBlocked}>⚠ {blockedText}</Text>
+        </View>
+      );
+    }
+
     if (isMock) return null;
 
     if (isPermanent) {
       return (
         <View style={[styles.banner, styles.bannerPermanent]}>
-          <Text style={styles.bannerTextPermanent}>
-            ★ Conexion permanente — esta conversacion no expira
-          </Text>
+          <Text style={styles.bannerTextPermanent}>★ Conexion permanente — esta conversacion no expira</Text>
         </View>
       );
     }
@@ -301,8 +334,6 @@ export default function ChatScreen() {
   // Render
   // ────────────────────────────────────────────────────────
 
-  const urgent = match ? timerIsUrgent(match.expires_at) : false;
-
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -322,9 +353,7 @@ export default function ChatScreen() {
               onPress={saveContact}
               disabled={saving}
             >
-              <Text style={styles.saveBtnText}>
-                {saving ? '...' : 'Guardar'}
-              </Text>
+              <Text style={styles.saveBtnText}>{saving ? '...' : 'Guardar'}</Text>
             </TouchableOpacity>
           )}
 
@@ -369,18 +398,22 @@ export default function ChatScreen() {
         <TextInput
           style={styles.input}
           value={draft}
-          onChangeText={setDraft}
-          placeholder="Escribe algo real..."
+          onChangeText={(t) => {
+            setDraft(t);
+            if (blockedText) setBlockedText(null); // limpiar aviso al escribir de nuevo
+          }}
+          placeholder={moderating ? 'Comprobando mensaje...' : 'Escribe algo real...'}
           placeholderTextColor="#444441"
           multiline
           maxLength={500}
+          editable={!moderating}
         />
         <TouchableOpacity
-          style={[styles.sendBtn, { opacity: draft.trim() ? 1 : 0.4 }]}
+          style={[styles.sendBtn, { opacity: draft.trim() && !moderating ? 1 : 0.4 }]}
           onPress={sendMessage}
-          disabled={!draft.trim()}
+          disabled={!draft.trim() || moderating}
         >
-          <Text style={styles.sendBtnText}>↑</Text>
+          <Text style={styles.sendBtnText}>{moderating ? '…' : '↑'}</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -400,11 +433,11 @@ const styles = StyleSheet.create({
     padding: 16, paddingTop: 48,
     borderBottomWidth: 0.5, borderBottomColor: '#2E2E2C',
   },
-  headerRight:  { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  back:         { fontSize: 15, color: '#7F77DD' },
-  timer:        { fontSize: 13, color: '#5F5E5A' },
-  timerUrgent:  { color: '#E05252' },
-  permanentText:{ fontSize: 13, color: '#1D9E75', fontWeight: '500' },
+  headerRight:   { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  back:          { fontSize: 15, color: '#7F77DD' },
+  timer:         { fontSize: 13, color: '#5F5E5A' },
+  timerUrgent:   { color: '#E05252' },
+  permanentText: { fontSize: 13, color: '#1D9E75', fontWeight: '500' },
 
   saveBtn: {
     backgroundColor: '#1D1D3A', borderRadius: 8,
@@ -412,31 +445,35 @@ const styles = StyleSheet.create({
     borderWidth: 0.5, borderColor: '#7F77DD',
   },
   saveBtnDisabled: { opacity: 0.5 },
-  saveBtnText:  { fontSize: 13, color: '#7F77DD', fontWeight: '500' },
-  savedText:    { fontSize: 13, color: '#1D9E75', fontWeight: '500' },
+  saveBtnText:     { fontSize: 13, color: '#7F77DD', fontWeight: '500' },
+  savedText:       { fontSize: 13, color: '#1D9E75', fontWeight: '500' },
 
-  messageList:  { padding: 16, gap: 12 },
-  bubble:       { maxWidth: '80%', borderRadius: 16, padding: 12 },
-  bubbleOwn:    { backgroundColor: '#7F77DD', alignSelf: 'flex-end',  borderBottomRightRadius: 4 },
-  bubbleOther:  { backgroundColor: '#1A1A18', alignSelf: 'flex-start', borderBottomLeftRadius: 4 },
-  bubbleText:   { fontSize: 15, lineHeight: 22 },
+  messageList: { padding: 16, gap: 12 },
+  bubble:      { maxWidth: '80%', borderRadius: 16, padding: 12 },
+  bubbleOwn:   { backgroundColor: '#7F77DD', alignSelf: 'flex-end',  borderBottomRightRadius: 4 },
+  bubbleOther: { backgroundColor: '#1A1A18', alignSelf: 'flex-start', borderBottomLeftRadius: 4 },
+  bubbleText:  { fontSize: 15, lineHeight: 22 },
 
   // Banners
-  banner:              { padding: 12, borderTopWidth: 0.5 },
-  bannerSave:          { backgroundColor: '#1D1D3A', borderTopColor: '#7F77DD' },
-  bannerTextSave:      { fontSize: 13, color: '#7F77DD', textAlign: 'center' },
+  banner:               { padding: 12, borderTopWidth: 0.5 },
 
-  bannerWaiting:       { backgroundColor: '#1A1A18', borderTopColor: '#5F5E5A' },
-  bannerTextWaiting:   { fontSize: 13, color: '#8F8E8A', textAlign: 'center' },
+  bannerBlocked:        { backgroundColor: '#2A1A1A', borderTopColor: '#E05252' },
+  bannerTextBlocked:    { fontSize: 13, color: '#E05252', textAlign: 'center' },
 
-  bannerMutual:        { backgroundColor: '#1A2A1A', borderTopColor: '#1D9E75' },
-  bannerTextMutual:    { fontSize: 13, color: '#1D9E75', textAlign: 'center' },
+  bannerSave:           { backgroundColor: '#1D1D3A', borderTopColor: '#7F77DD' },
+  bannerTextSave:       { fontSize: 13, color: '#7F77DD', textAlign: 'center' },
 
-  bannerPermanent:     { backgroundColor: '#1A2A1A', borderTopColor: '#1D9E75' },
-  bannerTextPermanent: { fontSize: 13, color: '#1D9E75', textAlign: 'center', fontWeight: '500' },
+  bannerWaiting:        { backgroundColor: '#1A1A18', borderTopColor: '#5F5E5A' },
+  bannerTextWaiting:    { fontSize: 13, color: '#8F8E8A', textAlign: 'center' },
 
-  bannerInfo:          { backgroundColor: '#1A1A18', borderTopColor: '#2E2E2C' },
-  bannerTextInfo:      { fontSize: 13, color: '#5F5E5A', textAlign: 'center' },
+  bannerMutual:         { backgroundColor: '#1A2A1A', borderTopColor: '#1D9E75' },
+  bannerTextMutual:     { fontSize: 13, color: '#1D9E75', textAlign: 'center' },
+
+  bannerPermanent:      { backgroundColor: '#1A2A1A', borderTopColor: '#1D9E75' },
+  bannerTextPermanent:  { fontSize: 13, color: '#1D9E75', textAlign: 'center', fontWeight: '500' },
+
+  bannerInfo:           { backgroundColor: '#1A1A18', borderTopColor: '#2E2E2C' },
+  bannerTextInfo:       { fontSize: 13, color: '#5F5E5A', textAlign: 'center' },
 
   inputRow: {
     flexDirection: 'row', gap: 8,
