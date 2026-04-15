@@ -26,14 +26,18 @@ interface Match {
   };
 }
 
-interface UserMood {
-  daily_mood: string | null;
-  mood_updated_at: string | null;
+interface UserData {
+  daily_mood:           string | null;
+  mood_updated_at:      string | null;
+  last_identity_review: string | null;
+  created_at:           string;
 }
 
 // ────────────────────────────────────────────────────────────
 // Helpers
 // ────────────────────────────────────────────────────────────
+
+const REVIEW_INTERVAL_DAYS = 90;
 
 function hoursUntil(iso: string): number {
   const diff = new Date(iso).getTime() - Date.now();
@@ -45,7 +49,6 @@ function formatMemberSince(iso: string): string {
   return d.toLocaleDateString('es', { month: 'long', year: 'numeric' });
 }
 
-// ¿El mood fue registrado hoy?
 function moodIsFromToday(updatedAt: string | null): boolean {
   if (!updatedAt) return false;
   const updated = new Date(updatedAt);
@@ -57,12 +60,20 @@ function moodIsFromToday(updatedAt: string | null): boolean {
   );
 }
 
-// Etiqueta legible del mood
 function moodLabel(mood: string | null): string {
   if (mood === 'listen') return '👂 Necesito escuchar';
   if (mood === 'talk')   return '💬 Quiero hablar';
   if (mood === 'rest')   return '🌙 Solo estar';
   return '';
+}
+
+// ¿Necesita revisión de identidad?
+// Sí si han pasado 90+ días desde el onboarding o la última revisión
+function needsIdentityReview(userData: UserData): boolean {
+  const referenceDate = userData.last_identity_review ?? userData.created_at;
+  if (!referenceDate) return false;
+  const daysSince = (Date.now() - new Date(referenceDate).getTime()) / 86_400_000;
+  return daysSince >= REVIEW_INTERVAL_DAYS;
 }
 
 // ────────────────────────────────────────────────────────────
@@ -72,14 +83,14 @@ function moodLabel(mood: string | null): string {
 export default function HomeScreen() {
   const router = useRouter();
 
-  const [loading, setLoading]   = useState(true);
-  const [match, setMatch]       = useState<Match | null>(null);
+  const [loading, setLoading]     = useState(true);
+  const [match, setMatch]         = useState<Match | null>(null);
   const [hoursLeft, setHoursLeft] = useState(0);
-  const [error, setError]       = useState('');
-  const [mood, setMood]         = useState<string | null>(null);
+  const [error, setError]         = useState('');
+  const [mood, setMood]           = useState<string | null>(null);
 
   useEffect(() => {
-    checkMoodThenLoad();
+    checkAndLoad();
   }, []);
 
   useEffect(() => {
@@ -90,37 +101,40 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, [match]);
 
-  // ── Comprobar mood antes de cargar el match ──────────────
-  const checkMoodThenLoad = async () => {
+  // ── Orden de comprobaciones al abrir home ────────────────
+  // 1. ¿Necesita revisión de identidad? → /review
+  // 2. ¿Tiene mood de hoy?              → /mood
+  // 3. Todo OK                          → cargar match
+  const checkAndLoad = async () => {
     setLoading(true);
     setError('');
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.replace('/auth/login');
-        return;
-      }
+      if (!user) { router.replace('/auth/login'); return; }
 
-      // Leer mood del usuario
       const { data: userData } = await supabase
         .from('users')
-        .select('daily_mood, mood_updated_at')
+        .select('daily_mood, mood_updated_at, last_identity_review, created_at')
         .eq('id', user.id)
         .single();
 
-      const userMood = userData as UserMood | null;
+      const ud = userData as UserData | null;
 
-      // Si el mood de hoy NO está registrado → ir a pantalla de mood
-      if (!moodIsFromToday(userMood?.mood_updated_at ?? null)) {
+      // 1. Revisión de identidad pendiente (90 días)
+      if (ud && needsIdentityReview(ud)) {
+        router.replace('/review');
+        return;
+      }
+
+      // 2. Mood del día no registrado
+      if (!moodIsFromToday(ud?.mood_updated_at ?? null)) {
         router.replace('/mood');
         return;
       }
 
-      // Mood ya registrado hoy → guardar para mostrar en UI
-      setMood(userMood?.daily_mood ?? null);
-
-      // Cargar el match normalmente
+      // 3. Todo OK — mostrar home con mood
+      setMood(ud?.daily_mood ?? null);
       await loadMatch(user.id);
 
     } catch (e: any) {
@@ -170,10 +184,7 @@ export default function HomeScreen() {
     }
   };
 
-  // ── Refrescar mood (botón en UI) ─────────────────────────
-  const changeMood = () => {
-    router.push('/mood');
-  };
+  const changeMood = () => router.push('/mood');
 
   // ────────────────────────────────────────────────────────
   // Render
@@ -195,7 +206,6 @@ export default function HomeScreen() {
         <Text style={styles.greeting}>Tu conexion de hoy</Text>
         <Text style={styles.title}>Pulse</Text>
 
-        {/* Mood del día */}
         {mood && (
           <TouchableOpacity style={styles.moodBadge} onPress={changeMood}>
             <Text style={styles.moodBadgeText}>{moodLabel(mood)}</Text>
@@ -204,9 +214,7 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {error ? (
-        <Text style={styles.errorText}>{error}</Text>
-      ) : null}
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
       {/* MATCH CARD */}
       {match ? (
@@ -215,15 +223,11 @@ export default function HomeScreen() {
 
           <View style={styles.statsRow}>
             <View style={styles.stat}>
-              <Text style={styles.statValue}>
-                {match.match_profile?.depth_score ?? 0}
-              </Text>
+              <Text style={styles.statValue}>{match.match_profile?.depth_score ?? 0}</Text>
               <Text style={styles.statLabel}>profundidad</Text>
             </View>
             <View style={styles.stat}>
-              <Text style={styles.statValue}>
-                {match.match_profile?.city ?? '—'}
-              </Text>
+              <Text style={styles.statValue}>{match.match_profile?.city ?? '—'}</Text>
               <Text style={styles.statLabel}>ciudad</Text>
             </View>
             <View style={styles.stat}>
@@ -257,17 +261,13 @@ export default function HomeScreen() {
         </View>
 
       ) : (
-        // SIN MATCH
         <View style={styles.noMatchCard}>
           <Text style={styles.noMatchTitle}>Tu Pulse llega a las 18:00</Text>
           <Text style={styles.noMatchSubtitle}>
             Cada dia conectamos a las personas en el momento{'\n'}
             en que mas lo necesitan. Vuelve esta tarde.
           </Text>
-          <TouchableOpacity
-            style={styles.retryBtn}
-            onPress={() => loadMatch()}
-          >
+          <TouchableOpacity style={styles.retryBtn} onPress={() => loadMatch()}>
             <Text style={styles.retryText}>Buscar conexion</Text>
           </TouchableOpacity>
         </View>
@@ -295,19 +295,14 @@ export default function HomeScreen() {
 // ────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  loader: {
-    flex: 1, backgroundColor: '#0D0D0D',
-    alignItems: 'center', justifyContent: 'center',
-  },
+  loader:    { flex: 1, backgroundColor: '#0D0D0D', alignItems: 'center', justifyContent: 'center' },
   container: { flex: 1, backgroundColor: '#0D0D0D' },
   scroll:    { padding: 24, paddingBottom: 48 },
 
-  // Cabecera
   header:   { marginBottom: 32, gap: 8 },
   greeting: { fontSize: 13, color: '#5F5E5A' },
   title:    { fontSize: 32, fontWeight: '500', color: '#F0F0EE' },
 
-  // Badge de mood
   moodBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: '#1A1A18', borderRadius: 20,
@@ -320,7 +315,6 @@ const styles = StyleSheet.create({
 
   errorText: { fontSize: 13, color: '#E24B4A', marginBottom: 16 },
 
-  // Match card
   matchCard: {
     backgroundColor: '#1A1A18', borderRadius: 16,
     padding: 24, borderWidth: 0.5, borderColor: '#2E2E2C', marginBottom: 24,
@@ -331,14 +325,13 @@ const styles = StyleSheet.create({
     flex: 1, backgroundColor: '#0D0D0D',
     borderRadius: 10, padding: 12,
   },
-  statValue: { fontSize: 15, fontWeight: '500', color: '#F0F0EE', marginBottom: 4 },
-  statLabel: { fontSize: 11, color: '#5F5E5A' },
-  timerRow:  { borderRadius: 8, padding: 10, alignItems: 'center', marginBottom: 20 },
-  timerText: { fontSize: 13, fontWeight: '500' },
-  startBtn:  { backgroundColor: '#7F77DD', borderRadius: 12, padding: 16, alignItems: 'center' },
+  statValue:    { fontSize: 15, fontWeight: '500', color: '#F0F0EE', marginBottom: 4 },
+  statLabel:    { fontSize: 11, color: '#5F5E5A' },
+  timerRow:     { borderRadius: 8, padding: 10, alignItems: 'center', marginBottom: 20 },
+  timerText:    { fontSize: 13, fontWeight: '500' },
+  startBtn:     { backgroundColor: '#7F77DD', borderRadius: 12, padding: 16, alignItems: 'center' },
   startBtnText: { fontSize: 16, fontWeight: '500', color: '#0D0D0D' },
 
-  // Sin match
   noMatchCard: {
     backgroundColor: '#1A1A18', borderRadius: 16, padding: 32,
     alignItems: 'center', borderWidth: 0.5, borderColor: '#2E2E2C', marginBottom: 24,
@@ -351,7 +344,6 @@ const styles = StyleSheet.create({
   },
   retryText: { fontSize: 14, color: '#7F77DD' },
 
-  // Footer
   footer:     { flexDirection: 'row', justifyContent: 'center', gap: 32, marginTop: 8 },
   footerLink: { fontSize: 14, color: '#5F5E5A' },
 });
