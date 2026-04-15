@@ -1,7 +1,13 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../src/lib/supabase';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
+// ────────────────────────────────────────────────────────────
+// Constantes
+// ────────────────────────────────────────────────────────────
+
+const ADMIN_EMAIL = 'admin@pulseapp.es';
 
 const DEPTH_LEVELS = [
   { min: 0,  label: 'Explorando',   color: '#888780' },
@@ -16,23 +22,37 @@ function getLevel(score: number) {
 }
 
 const MOCK_PROFILE = {
-  depth_score: 5,
-  city: 'Madrid',
-  total_contacts: 3,
+  depth_score:         5,
+  city:                'Madrid',
+  total_contacts:      3,
   total_conversations: 8,
-  member_since: 'abril 2026',
+  member_since:        'abril 2026',
 };
 
+// ────────────────────────────────────────────────────────────
+// Componente
+// ────────────────────────────────────────────────────────────
+
 export default function ProfileScreen() {
-  const router = useRouter();
-  const level = getLevel(MOCK_PROFILE.depth_score);
+  const router   = useRouter();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  const level    = getLevel(MOCK_PROFILE.depth_score);
   const progress = Math.min(MOCK_PROFILE.depth_score / 30, 1);
 
+  // Detectar si el usuario actual es admin
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user?.email === ADMIN_EMAIL) setIsAdmin(true);
+    });
+  }, []);
+
+  // ── Acciones ─────────────────────────────────────────────
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.replace('/auth/login');
   };
-  
+
   const handleDeleteAccount = async () => {
     Alert.alert(
       'Eliminar cuenta',
@@ -46,16 +66,13 @@ export default function ProfileScreen() {
             try {
               const { data: { user } } = await supabase.auth.getUser();
               if (!user) return;
-
-              // Marcar cuenta para eliminacion
               await supabase
                 .from('users')
                 .update({ deletion_requested_at: new Date().toISOString() })
                 .eq('id', user.id);
-
               await supabase.auth.signOut();
               router.replace('/auth/login');
-            } catch (e) {
+            } catch {
               Alert.alert('Error', 'No se pudo eliminar la cuenta. Intenta de nuevo.');
             }
           },
@@ -63,23 +80,30 @@ export default function ProfileScreen() {
       ]
     );
   };
+
+  // ────────────────────────────────────────────────────────
+  // Render
+  // ────────────────────────────────────────────────────────
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
       <Text style={styles.title}>Perfil</Text>
 
+      {/* HERO */}
       <View style={styles.heroCard}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarSymbol}>◆</Text>
+          <Text style={styles.avatarSymbol}>✦</Text>
         </View>
         <Text style={[styles.levelText, { color: level.color }]}>{level.label}</Text>
         <Text style={styles.depthScore}>{MOCK_PROFILE.depth_score}</Text>
         <View style={styles.track}>
           <View style={[styles.fill, { width: `${progress * 100}%`, backgroundColor: level.color }]} />
         </View>
-        <Text style={styles.hint}>Cada conexión guardada suma un punto</Text>
+        <Text style={styles.hint}>Cada conexion guardada suma un punto</Text>
         <Text style={styles.memberSince}>En Pulse desde {MOCK_PROFILE.member_since}</Text>
       </View>
 
+      {/* STATS */}
       <View style={styles.statsRow}>
         <View style={styles.stat}>
           <Text style={styles.statValue}>{MOCK_PROFILE.total_conversations}</Text>
@@ -95,30 +119,42 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {/* ACCIONES */}
       <TouchableOpacity style={styles.actionRow} onPress={() => router.push('/contacts')}>
         <Text style={styles.actionText}>Ver contactos</Text>
         <Text style={styles.actionArrow}>›</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.actionRow} onPress={() => router.push('/capsule')}>
-        <Text style={styles.actionText}>Mi cápsula semanal</Text>
+        <Text style={styles.actionText}>Mi capsula semanal</Text>
         <Text style={styles.actionArrow}>›</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.actionRow} onPress={() => router.push('/legal/privacy')}>
-        <Text style={styles.actionText}>Política de privacidad</Text>
+        <Text style={styles.actionText}>Politica de privacidad</Text>
         <Text style={styles.actionArrow}>›</Text>
       </TouchableOpacity>
-      
+
       <TouchableOpacity style={styles.actionRow} onPress={handleDeleteAccount}>
         <Text style={[styles.actionText, { color: '#E24B4A' }]}>Eliminar mi cuenta</Text>
         <Text style={styles.actionArrow}>›</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.actionRow} onPress={handleSignOut}>
-        <Text style={[styles.actionText, { color: '#E24B4A' }]}>Cerrar sesión</Text>
+        <Text style={[styles.actionText, { color: '#E24B4A' }]}>Cerrar sesion</Text>
         <Text style={styles.actionArrow}>›</Text>
       </TouchableOpacity>
+
+      {/* ENLACE ADMIN — solo visible para admin@pulseapp.es */}
+      {isAdmin && (
+        <TouchableOpacity
+          style={styles.adminRow}
+          onPress={() => router.push('/admin')}
+        >
+          <Text style={styles.adminText}>Panel de administracion</Text>
+          <Text style={styles.actionArrow}>›</Text>
+        </TouchableOpacity>
+      )}
 
       <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
         <Text style={styles.backText}>← Volver</Text>
@@ -127,10 +163,15 @@ export default function ProfileScreen() {
   );
 }
 
+// ────────────────────────────────────────────────────────────
+// Estilos
+// ────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0D0D0D' },
-  scroll: { padding: 24, paddingTop: 48, paddingBottom: 48 },
-  title: { fontSize: 28, fontWeight: '500', color: '#F0F0EE', marginBottom: 24 },
+  container:    { flex: 1, backgroundColor: '#0D0D0D' },
+  scroll:       { padding: 24, paddingTop: 48, paddingBottom: 48 },
+  title:        { fontSize: 28, fontWeight: '500', color: '#F0F0EE', marginBottom: 24 },
+
   heroCard: {
     backgroundColor: '#1A1A18', borderRadius: 16,
     padding: 24, alignItems: 'center',
@@ -142,15 +183,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center', marginBottom: 12,
   },
   avatarSymbol: { fontSize: 32, color: '#534AB7' },
-  levelText: { fontSize: 15, fontWeight: '500', marginBottom: 4 },
-  depthScore: { fontSize: 36, fontWeight: '500', color: '#F0F0EE', marginBottom: 12 },
+  levelText:    { fontSize: 15, fontWeight: '500', marginBottom: 4 },
+  depthScore:   { fontSize: 36, fontWeight: '500', color: '#F0F0EE', marginBottom: 12 },
   track: {
     width: '100%', height: 6, backgroundColor: '#2E2E2C',
     borderRadius: 99, overflow: 'hidden', marginBottom: 8,
   },
-  fill: { height: '100%', borderRadius: 99 },
-  hint: { fontSize: 12, color: '#5F5E5A', marginBottom: 4 },
-  memberSince: { fontSize: 12, color: '#444441' },
+  fill:         { height: '100%', borderRadius: 99 },
+  hint:         { fontSize: 12, color: '#5F5E5A', marginBottom: 4 },
+  memberSince:  { fontSize: 12, color: '#444441' },
+
   statsRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
   stat: {
     flex: 1, backgroundColor: '#1A1A18',
@@ -159,13 +201,24 @@ const styles = StyleSheet.create({
   },
   statValue: { fontSize: 18, fontWeight: '500', color: '#F0F0EE', marginBottom: 4 },
   statLabel: { fontSize: 11, color: '#5F5E5A' },
+
   actionRow: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', paddingVertical: 16,
     borderBottomWidth: 0.5, borderBottomColor: '#2E2E2C',
   },
-  actionText: { fontSize: 15, color: '#F0F0EE' },
+  actionText:  { fontSize: 15, color: '#F0F0EE' },
   actionArrow: { fontSize: 20, color: '#2E2E2C' },
-  backBtn: { marginTop: 32 },
+
+  // Admin — mismo estilo pero con acento púrpura sutil
+  adminRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', paddingVertical: 16,
+    borderBottomWidth: 0.5, borderBottomColor: '#2E2E2C',
+    marginTop: 8,
+  },
+  adminText: { fontSize: 15, color: '#7F77DD' },
+
+  backBtn:  { marginTop: 32 },
   backText: { fontSize: 15, color: '#7F77DD' },
 });
