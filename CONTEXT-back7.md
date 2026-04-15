@@ -448,12 +448,9 @@ MODEL_NAME=paraphrase-multilingual-mpnet-base-v2
 - [x] Verificacion de edad (13-19 anos) en registro ✓
 - [x] Aceptacion de terminos y condiciones ✓
 - [x] Aviso GDPR/LOPD en registro ✓
-- [x] Politica de privacidad completa (11 secciones, RGPD/LOPD) ✓
-- [x] Terminos y condiciones completos ✓
-- [x] Enlaces desde login y perfil funcionando ✓
-- [x] Rutas legales accesibles sin sesion iniciada ✓
-- [x] Boton eliminar cuenta y datos ✓ — con confirmacion y marca deletion_requested_at
-- [x] Consentimiento parental menores de 14 ✓ — campo email padre/tutor aparece automaticamente
+- [ ] Politica de privacidad completa (texto legal)
+- [ ] Boton eliminar cuenta y datos
+- [ ] Consentimiento parental menores de 14
 - [ ] Notificaciones push remotas (servidor → movil)
 - [x] Prueba del equipo completada ✓ — chat bidireccional verificado entre test2 y test3
 - [x] Matching engine desplegado en Railway ✓
@@ -481,12 +478,7 @@ Plan:            Free
 - react-native-worklets-core instalado como dependencia de reanimated → también eliminado del build base
 
 ### Pendiente — Semanas 10–12
-- [x] Landing page lista de espera en produccion ✓
-  - URL: https://slh73.github.io/pulse-landing
-  - GitHub: https://github.com/SLH73/pulse-landing
-  - Conectada a Supabase tabla waitlist
-  - Contador de inscritos en tiempo real
-- [ ] Llegar a 200 usuarios en lista de espera Madrid
+- Lista de espera de 200 usuarios en ciudad piloto (Madrid)
 - Activación del geofencing por ciudad
 - Reclutamiento de primeros usuarios
 - Briefing al equipo de moderación

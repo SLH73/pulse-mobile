@@ -481,12 +481,7 @@ Plan:            Free
 - react-native-worklets-core instalado como dependencia de reanimated → también eliminado del build base
 
 ### Pendiente — Semanas 10–12
-- [x] Landing page lista de espera en produccion ✓
-  - URL: https://slh73.github.io/pulse-landing
-  - GitHub: https://github.com/SLH73/pulse-landing
-  - Conectada a Supabase tabla waitlist
-  - Contador de inscritos en tiempo real
-- [ ] Llegar a 200 usuarios en lista de espera Madrid
+- Lista de espera de 200 usuarios en ciudad piloto (Madrid)
 - Activación del geofencing por ciudad
 - Reclutamiento de primeros usuarios
 - Briefing al equipo de moderación
