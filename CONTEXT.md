@@ -1,5 +1,5 @@
 # CONTEXT.md — Proyecto Pulse
-> Documento de contexto completo del proyecto. Última actualización: abril 2026 — build Android instalado en dispositivo real.
+> Documento de contexto completo del proyecto. Última actualización: abril 2026 — todas las mejoras del roadmap implementadas.
 > Usar este fichero para onboarding de nuevos desarrolladores, continuación de sesiones con IA, y referencia técnica del estado del proyecto.
 
 ---
@@ -12,15 +12,18 @@ Pulse es una app para adolescentes de 13–19 años que conecta a cada usuario c
 
 ### Mecánica principal
 - El usuario completa un onboarding de 5 preguntas emocionales (no un formulario de intereses)
-- Cada día a las 18:00 recibe una notificación con su "Pulse del día" — una persona real con alta compatibilidad de identidad
+- Cada día el usuario indica su estado emocional (escuchar / hablar / estar) antes de recibir su match
+- Cada día a las 18:00 recibe una notificación push con su "Pulse del día" — una persona real con alta compatibilidad de identidad
 - La conversación es efímera: desaparece en 72 horas si no se guarda el contacto
-- Para guardar un contacto se necesitan al menos 10 mensajes — la profundidad se gana
+- Para guardar un contacto se necesitan al menos 3 mensajes — la profundidad se gana
+- Si ambos guardan mutuamente → el chat se extiende 72h más (máximo 3 extensiones = 7 días), luego conexión permanente
 - Cada semana se genera una "cápsula": una visualización abstracta única de las conversaciones de esa semana, compartible en redes
+- Cada 90 días se muestra una "revisión de identidad" con 2 preguntas nuevas para actualizar el vector de matching
 
 ### Por qué es diferente
 - Hinge resolvió el amor. Pulse resuelve la amistad adolescente.
 - El estatus en Pulse no se gana siendo popular, se gana siendo profundo.
-- La viralidad está integrada en el producto: las cápsulas semanales, el invite de alta fricción (3 palabras), y los "Pulses compartidos" cuando dos conocidos se emparejan.
+- La viralidad está integrada en el producto: las cápsulas semanales, el invite de alta fricción (3 palabras), los "Pulses compartidos" cuando dos conocidos se emparejan, y la tarjeta viral de conexión compartible.
 
 ---
 
@@ -35,68 +38,57 @@ Pulse es una app para adolescentes de 13–19 años que conecta a cada usuario c
 | Backend | Supabase (PostgreSQL + Auth + Realtime + Edge Functions) | RLS granular, mensajería en tiempo real, sin infra propia |
 | Edge Functions | Deno (TypeScript) | Runtime de Supabase, validación con Zod |
 | Matching engine | Python + FastAPI (Railway) | Microservicio independiente, escalable |
-| Embeddings | sentence-transformers (paraphrase-multilingual-mpnet-base-v2) | Multilingüe, 768 dimensiones |
-| Índice ANN | FAISS IVFFlat | Matching aproximado a escala (>100 usuarios) |
-| Privacidad diferencial | Mecanismo gaussiano (ε=0.5, δ=1e-5) | Protección de vectores de menores |
-| Cifrado de vectores | Fernet (AES-128-CBC + HMAC-SHA256) | Vectores nunca en texto plano |
+| Moderación | Claude API (claude-haiku-4-5-20251001) | Moderación proactiva de mensajes en tiempo real |
+| Notificaciones | Expo Notifications + Expo Push API | Push nativo iOS y Android sin configuración FCM/APNs directa |
+| Suscripciones | RevenueCat | Gestión de Pulse Deep (4,99€/mes) |
+| Panel parental | Next.js + Vercel | App web separada, gratuita |
 | CI/CD | GitHub Actions + EAS Build | PR checks, deploy automático, builds firmados |
 | Monitorización | Sentry + PostHog (EU) | Errores en tiempo real, funnel de producto |
-| Notificaciones | Expo Notifications + APNs + FCM | Push nativo en iOS y Android |
 
 ---
 
-## 3. Estructura del monorepo
+## 3. Estructura del proyecto
 
 ```
-pulse/
-├── turbo.json                          # Turborepo config
-├── package.json                        # Workspaces raíz
-├── .github/
-│   └── workflows/
-│       ├── pr.yml                      # Lint + type-check + tests en cada PR
-│       ├── main.yml                    # Deploy en merge a main
-│       └── release.yml                 # Build firmado + submit a stores
-├── apps/
-│   ├── mobile/                         # React Native + Expo
-│   │   ├── app/                        # Expo Router (file-based)
-│   │   │   ├── (auth)/                 # login.tsx, register.tsx
-│   │   │   ├── (onboarding)/           # question/[step].tsx, complete.tsx
-│   │   │   └── (app)/                  # home, chat/[matchId], contacts, capsule, profile
-│   │   └── src/
-│   │       ├── components/             # Avatar, StatCard, EmptyState, SectionHeader, DepthMeter, InviteCard, CapsuleVisual
-│   │       ├── hooks/                  # useOnboarding, useMatch, useMessages, useMatchTimer, useContacts, useCapsules, useProfile
-│   │       ├── stores/                 # session.ts (Zustand+MMKV), onboarding.ts
-│   │       ├── lib/                    # supabase.ts, sentry.ts, analytics.ts
-│   │       ├── theme/                  # tokens.ts, useTheme.ts
-│   │       └── utils/                  # avatar.ts, date.ts
-│   └── backend/
-│       └── supabase/
-│           ├── migrations/             # SQL versionado
-│           ├── functions/              # Edge Functions Deno
-│           │   ├── _shared/            # cors.ts, auth.ts, response.ts
-│           │   ├── onboarding/         # POST — genera vector de identidad
-│           │   ├── match/              # GET — match del día
-│           │   ├── messages/           # POST — enviar mensaje
-│           │   ├── contacts/           # POST — guardar contacto
-│           │   └── invites/            # GET/POST — gestión de invites
-│           └── config.toml
-├── packages/
-│   └── shared/
-│       └── src/
-│           ├── types/                  # user.ts, match.ts, message.ts, contact.ts, capsule.ts
-│           ├── validators/             # onboarding.ts, message.ts (Zod schemas)
-│           └── constants/             # questions.ts (las 5 preguntas), limits.ts
-└── services/
-    └── matching-engine/                # Microservicio Python (Railway)
-        ├── app/
-        │   ├── main.py                 # FastAPI app + lifespan
-        │   ├── routers/                # embed.py, match.py, feedback.py, index.py
-        │   └── core/                   # config.py, logging.py, security.py, crypto.py, privacy.py, supabase.py, embedder.py, scoring.py, faiss_index.py, cold_start.py
-        ├── tests/                      # conftest.py, test_privacy.py, test_scoring.py, test_embedder.py, test_crypto.py
-        ├── scripts/                    # evaluate_matching.py
-        ├── Dockerfile
-        ├── docker-compose.yml
-        └── requirements.txt
+C:\Users\slope\
+├── pulse-mobile\                   # App React Native + Expo
+│   ├── app\
+│   │   ├── auth\                   # login.tsx, register.tsx
+│   │   ├── onboarding\             # step0-4.tsx, _layout.tsx
+│   │   ├── home\                   # index.tsx
+│   │   ├── chat\                   # [id].tsx
+│   │   ├── contacts\               # index.tsx
+│   │   ├── capsule\                # index.tsx
+│   │   ├── profile\                # index.tsx
+│   │   ├── admin\                  # index.tsx (solo admin@pulseapp.es)
+│   │   ├── legal\                  # privacy.tsx, terms.tsx
+│   │   ├── mood.tsx                # Estado emocional diario
+│   │   ├── review.tsx              # Revisión de identidad cada 90 días
+│   │   ├── deep.tsx                # Pantalla de suscripción Pulse Deep
+│   │   ├── index.tsx
+│   │   └── _layout.tsx
+│   ├── src\
+│   │   ├── lib\
+│   │   │   ├── supabase.ts
+│   │   │   ├── moderation.ts       # Moderación con Claude API
+│   │   │   ├── notifications.ts    # Registro de token push
+│   │   │   └── revenuecat.ts       # Wrapper RevenueCat
+│   │   └── ...
+│   └── supabase\
+│       └── functions\
+│           └── notify-match\       # Edge Function: push tras generar match
+│               └── index.ts
+├── pulse-matching-engine\          # FastAPI en Railway
+│   ├── main.py                     # Endpoints: /health /embed /match
+│   ├── requirements.txt
+│   └── Dockerfile
+└── pulse-parental\                 # Next.js en Vercel
+    └── app\
+        ├── page.tsx
+        ├── layout.tsx
+        └── components\
+            ├── LoginForm.tsx
+            └── Dashboard.tsx
 ```
 
 ---
@@ -107,245 +99,294 @@ pulse/
 
 | Tabla | Propósito | RLS |
 |---|---|---|
-| `users` | Perfil del usuario, edad, ciudad, consentimiento parental | Solo el propio usuario |
-| `identity_vectors` | Vector de identidad cifrado con pgsodium | Solo service_role |
-| `daily_matches` | Match diario entre dos usuarios (TTL 72h) | Solo participantes del match |
-| `messages` | Mensajes efímeros (TTL 72h, borrado físico) | Solo participantes del match |
-| `saved_contacts` | Contactos guardados tras conversación | Solo el propio usuario |
-| `weekly_capsules` | Resumen semanal generado automáticamente | Solo el propio usuario |
-| `invites` | Invitaciones con 3 palabras (1 por semana) | Solo el invitador |
-| `moderation_flags` | Reportes de usuarios | Solo inserción propia |
-| `compatibility_events` | Señales de comportamiento para reentrenamiento ML | Solo service_role |
+| `users` | Perfil del usuario | Solo el propio usuario |
+| `identity_vectors` | Vector de identidad | Solo service_role |
+| `daily_matches` | Match diario entre dos usuarios (TTL 72h extensible) | Solo participantes |
+| `messages` | Mensajes efímeros (TTL 72h, borrado físico) | Solo participantes |
+| `saved_contacts` | Contactos guardados | Solo el propio usuario |
+| `weekly_capsules` | Resumen semanal | Solo el propio usuario |
+| `invites` | Invitaciones con 3 palabras | Solo el invitador |
+| `moderation_flags` | Reportes de moderación automática | Solo inserción propia |
+| `waitlist` | Lista de espera landing page | Solo inserción |
 
-### Jobs programados (pg_cron)
-- `purge-expired-messages`: cada hora — borra físicamente mensajes con `expires_at < now()`
-- `generate-weekly-capsules`: lunes a las 08:00 UTC — genera cápsulas para todos los usuarios activos
+### Columnas clave añadidas
 
-### Campos clave de seguridad
-- `users.is_junior`: columna generada — true si el usuario tiene menos de 16 años
-- `users.deleted_at`: soft delete — datos retenidos 30 días para auditoría, luego purga física
-- `users.consent_status`: pending/approved/rejected — para menores de 16 en Europa (DSA Art. 28)
-- `identity_vectors.vector_enc`: bytea cifrado con pgsodium — nunca texto plano
-- `messages.expires_at`: TTL de 72 horas — borrado físico garantizado
+**users:**
+- `daily_mood` — listen / talk / rest (estado emocional del día)
+- `mood_updated_at` — timestamp del último mood
+- `last_identity_review` — fecha de última revisión de identidad (90 días)
+- `expo_push_token` — token de notificaciones push del dispositivo
+- `is_deep` — boolean: suscripción Pulse Deep activa
+- `deep_since` — fecha de activación de Pulse Deep
+- `deep_expires_at` — fecha de expiración de Pulse Deep
+- `is_paused` — boolean: app pausada por padre/tutor
+- `parental_email` — email del padre/tutor para panel parental
+- `deletion_requested_at` — soft delete
+- `is_junior` — generada: true si menor de 16
+
+**daily_matches:**
+- `saved_by_a` — boolean: user_a ha guardado
+- `saved_by_b` — boolean: user_b ha guardado
+- `mutual_save_count` — número de extensiones mutuas (máx 3)
+
+### Funciones SQL
+
+| Función | Propósito |
+|---|---|
+| `handle_mutual_save(match_id, user_id)` | Gestiona el guardado mutuo y extensión del chat |
+| `increment_depth_score(user_id)` | Suma 1 punto de profundidad |
+| `set_daily_mood(user_id, mood)` | Guarda el estado emocional del día |
+| `complete_identity_review(user_id)` | Marca la revisión de identidad como completada |
+| `get_admin_metrics()` | Agrega métricas para el dashboard admin |
+| `save_push_token(user_id, token)` | Guarda el token push del dispositivo |
+| `set_deep_status(user_id, is_deep, expires_at)` | Activa/desactiva Pulse Deep |
+| `is_user_paused(user_id)` | Comprueba si el usuario está pausado |
+| `get_today_match(user_id)` | Obtiene el match del día del usuario |
+
+### Edge Functions
+
+| Función | Propósito |
+|---|---|
+| `notify-match` | Envía notificación push via Expo API tras generar un match |
+| `onboarding` | Genera y cifra el vector de identidad |
+| `match` | Encuentra el mejor match del día |
+| `messages` | Envía mensajes |
+| `contacts` | Guarda contactos |
+| `invites` | Gestiona invitaciones |
 
 ---
 
 ## 5. Matching engine — cómo funciona
 
-### Pipeline de onboarding
-1. Usuario responde 5 preguntas en texto libre
-2. Edge Function llama a `POST /embed` en el engine
-3. El engine concatena respuestas con `[SEP]` y genera embedding con sentence-transformers (768 dimensiones)
-4. Se aplica ruido gaussiano diferencial (ε=0.5, δ=1e-5) — protege la privacidad del vector
-5. El vector se cifra con Fernet y se guarda en `identity_vectors` — nunca sale del servidor
-
 ### Pipeline de matching diario
-1. Job diario a las 17:50 UTC llama a `POST /match` para cada usuario
-2. El engine carga el vector del usuario y el pool de candidatos elegibles
-3. Filtros duros: excluir matches recientes (30 días), restricción de edad (±2 años si alguno es junior)
-4. Scoring: `cosine_similarity(user_vector, candidate_vector) + geo_boost(0.05 si misma ciudad)`
-5. Estrategia adaptativa por tamaño del pool:
-   - 0–9 usuarios: sin match (cold start — insuficiente)
-   - 10–99 usuarios: búsqueda exhaustiva
-   - 100+ usuarios: FAISS IVFFlat (ANN, recall ~95%)
-6. El match se inserta en `daily_matches` y se dispara notificación push
+1. POST /match para cada usuario
+2. Carga vectores de candidatos desde Supabase
+3. Scoring: cosine_similarity + geo_boost (misma ciudad) + mood_boost (moods complementarios listen↔talk)
+4. Inserta match en `daily_matches`
+5. Llama a Edge Function `notify-match` para ambos usuarios → push a las 18:00
 
-### API del matching engine
+### Mood boost
+- `listen` ↔ `talk` → +0.10 al score de compatibilidad
+- `rest` → neutral, sin boost ni penalización
+
+### API del matching engine (Railway)
+- URL: https://pulse-matching-engine-production.up.railway.app
+- GitHub: https://github.com/SLH73/pulse-matching-engine
 
 | Endpoint | Método | Propósito |
 |---|---|---|
-| `/health` | GET | Estado del servicio e índice FAISS |
-| `/embed` | POST | Genera y cifra el vector de identidad |
-| `/match` | POST | Encuentra el mejor match del día |
-| `/feedback` | POST | Señales de comportamiento (saved/ignored/long_session) |
-| `/index/rebuild` | POST | Reconstruye el índice FAISS (cada 6h en producción) |
-
-Autenticación: HMAC con `X-Service-Key` header — nunca JWT de usuario.
+| `/health` | GET | Estado del servicio |
+| `/embed` | POST | Genera vector de identidad |
+| `/match` | POST | Encuentra el mejor match + envía push |
 
 ---
 
 ## 6. Pantallas implementadas
 
 ### (auth)
-- `login.tsx` — email + password, redirect según estado de onboarding
-- `register.tsx` — registro con verificación de edad y consentimiento parental para <16
+- `login.tsx` — email + password
+- `register.tsx` — registro con verificación de edad y consentimiento parental
 
-### (onboarding)
-- `question/[step].tsx` — OnboardingQuestionScreen con animaciones Reanimated, progreso visual, validación mínima 10 caracteres, submit al completar paso 5
+### Flujo de entrada (home)
+El home comprueba en orden:
+1. ¿Han pasado 90 días? → `/review` (revisión de identidad)
+2. ¿Tiene mood de hoy? → `/mood` (estado emocional)
+3. Todo OK → muestra el match del día
 
-### (app)
-- `home.tsx` — match del día con perfil anónimo (depth_score, city, member_since), animación de entrada, estado vacío hasta las 18:00
-- `chat/[matchId].tsx` — mensajes en tiempo real (Supabase Realtime), optimistic updates, contador de 72h con color urgente <6h, botón de guardar contacto tras 10 mensajes
-- `contacts.tsx` — lista de contactos guardados con avatar generativo (color + símbolo determinista por user_id), último mensaje, pull-to-refresh, empty state
-- `capsule.tsx` — visualización SVG abstracta única por seed, selector de semanas anteriores, stats, botón de share nativo, empty state primera semana
-- `profile.tsx` — avatar generativo, DepthMeter animado con 5 niveles (Explorando/Conectando/Profundo/Muy profundo/Esencial), stats totales, editor de ciudad, InviteCard (3 palabras + share), cerrar sesión, solicitar datos (GDPR), eliminar cuenta con confirmación y soft delete
-
----
-
-## 7. Componentes reutilizables
-
-| Componente | Propósito |
-|---|---|
-| `Avatar` | Círculo con color HSL y símbolo deterministas por user_id |
-| `StatCard` | Tarjeta de métrica con label y valor |
-| `EmptyState` | Estado vacío con título, subtítulo y acción opcional |
-| `SectionHeader` | Cabecera de sección con título y subtítulo opcional |
-| `DepthMeter` | Barra de progreso animada con 5 niveles de profundidad |
-| `InviteCard` | Formulario de invite con 3 palabras + share nativo |
-| `CapsuleVisual` | SVG generativo único por seed (círculos = conversaciones, líneas = contactos) |
-| `MessageBubble` | Burbuja de mensaje con estilo propio/ajeno |
+### Pantallas principales
+- `mood.tsx` — 3 opciones: Necesito escuchar / Quiero hablar / Solo estar
+- `review.tsx` — 2 preguntas nuevas cada 90 días para actualizar el vector
+- `home/index.tsx` — match del día con badge de mood y timer real
+- `chat/[id].tsx` — chat en tiempo real con moderación, extensión mutua, tarjeta viral
+- `contacts/index.tsx` — lista de contactos guardados
+- `capsule/index.tsx` — visualización SVG generativa semanal
+- `profile/index.tsx` — DepthMeter, badge Deep, acceso a Pulse Deep, link admin
+- `deep.tsx` — pantalla de suscripción Pulse Deep con RevenueCat
+- `admin/index.tsx` — dashboard de métricas (solo admin@pulseapp.es)
 
 ---
 
-## 8. Sistema de diseño
+## 7. Moderación
 
-```typescript
-// Paleta principal
-purple400: "#7F77DD"   // Accent principal
-teal400:   "#1D9E75"   // Success / depth positivo
-gray900:   "#1A1A18"   // Texto oscuro
+### Claude API (Haiku)
+- Antes de enviar cada mensaje → llamada a Claude Haiku
+- Analiza: toxicity, threat, sexually_explicit (scores 0.0–1.0)
+- Score > 0.8 → mensaje bloqueado, banner rojo en el chat
+- Score > 0.9 → además se inserta flag en `moderation_flags` para revisión manual
+- Sin API key → moderación desactivada silenciosamente (modo dev)
 
-// Tokens
-spacing: { xs:4, sm:8, md:16, lg:24, xl:40 }
-radius:  { sm:8, md:12, lg:20, full:999 }
-animation: { fast:200, normal:350, slow:600 }
-
-// Tipografía
-h1: { fontSize:28, fontWeight:"500" }
-h2: { fontSize:22, fontWeight:"500" }
-body: { fontSize:16, fontWeight:"400", lineHeight:24 }
-sm:  { fontSize:13, fontWeight:"400", lineHeight:18 }
+### Variables de entorno
+```
+EXPO_PUBLIC_ANTHROPIC_KEY=sk-ant-...
 ```
 
-Dark mode automático vía `useColorScheme()` en todos los componentes.
+---
+
+## 8. Notificaciones push remotas
+
+### Flujo
+1. Al iniciar sesión → `registerPushToken()` pide permisos y guarda token en Supabase
+2. Matching engine genera match → llama a Edge Function `notify-match`
+3. Edge Function lee token de Supabase → envía push via Expo Push API
+4. Usuario recibe: "Tu Pulse de hoy — Alguien te está esperando. Tienes 72h para conectar."
+
+### Sin configuración adicional necesaria
+Expo Push API actúa como intermediario de FCM/APNs. No requiere configurar Google Cloud ni Apple Developer para el MVP.
 
 ---
 
-## 9. Analytics y monitorización
+## 9. Monetización — Pulse Deep
 
-### PostHog — solo 5 eventos (privacidad estricta)
-```
-onboarding_started       → al iniciar el onboarding
-onboarding_completed     → al completar las 5 preguntas
-match_received           → al recibir el match del día
-conversation_started     → al enviar el primer mensaje
-contact_saved            → al guardar un contacto
-```
+### RevenueCat
+- Proyecto: Pulse (ID: 185bf0ce)
+- Entitlement: `pulse_deep`
+- API key Android: `test_FJkNKIYCGitzQvcxpLOXansfcRY` (reemplazar por producción antes del lanzamiento)
 
-**Reglas de privacidad en analytics:**
-- IDs de usuario hasheados con SHA-256 (nunca el ID real)
-- Nunca trackear contenido de mensajes ni respuestas del onboarding
-- Nunca enviar email ni datos identificables
-- Servidor europeo de PostHog (GDPR)
+### Beneficios Pulse Deep (4,99€/mes)
+- Hasta 3 conexiones diarias
+- Explicación de compatibilidad en el match
+- Historial de cápsulas ilimitado
+- Estadísticas avanzadas del DepthMeter
+- Badge "Profundo" visible en el perfil
 
-### Sentry — errores en tiempo real
-- Filtrar errores de red offline (esperados)
-- Filtrar AbortError (cancelaciones del usuario)
-- Nunca capturar breadcrumbs de input (podrían contener texto de mensajes)
-- URLs sanitizadas (sin query params en reportes)
-
-### Dashboard de métricas (scripts/metrics-dashboard.ts)
-Actualización cada 30 segundos. Métricas monitorizadas:
-- Total usuarios registrados y tasa de onboarding completo
-- Matches generados hoy
-- Conversaciones activas (últimas 24h)
-- Tasa de guardado (objetivo: >30%)
-- Flags de moderación pendientes (alerta si >3)
-- Latencia del matching engine (alerta si >2000ms)
+### Pendiente para producción
+- Configurar producto `pulse_deep_monthly` en Google Play Console con precio 4,99€
+- Vincular producto en RevenueCat dashboard
+- Reemplazar API key test por producción
 
 ---
 
-## 10. Seguridad y compliance
+## 10. Panel parental
 
-### Modelo de amenazas (STRIDE)
-- **Spoofing**: verificación parental obligatoria para <16, restricción de edad ±2 años en matching
-- **Tampering**: RLS en PostgreSQL — imposible acceder a datos de otro usuario
-- **Repudiation**: `sender_id` inmutable, flags de moderación retenidos 90 días
-- **Information Disclosure**: vectores cifrados con pgsodium, solo service_role puede leerlos
-- **DoS**: rate limiting en Edge Functions (1 request/minuto por usuario), 1 match por día
-- **Elevation of Privilege**: JWT RS256 validado por Supabase, service key nunca toca el cliente
+- URL: https://pulse-parental.vercel.app (pendiente dominio personalizado)
+- GitHub: https://github.com/SLH73/pulse-parental
+- Acceso: con el email que el menor introdujo como "email parental" al registrarse
+
+### Muestra (sin revelar nombres ni mensajes)
+- Nivel de profundidad 1-5
+- Conexiones de la semana
+- Contactos guardados
+- Tendencia de bienestar social
+- Botón para pausar la app del menor
+
+---
+
+## 11. Seguridad y compliance
+
+### Moderación automática
+- Claude API modera cada mensaje antes de enviarlo
+- Flags automáticos para revisión manual si score > 0.9
+- Registros retenidos 90 días para auditoría
 
 ### Compliance regulatorio
-- **COPPA** (EE.UU.): verificación de edad, restricciones para <13
-- **DSA Art. 28** (Europa): consentimiento parental por email para <16
-- **GDPR**: right to erasure implementado, soft delete + purga en 30 días, datos anonimizados en analytics
-- **LOPD** (España): DPO designado, ROPA registrado
-
-### Cifrado
-- En tránsito: TLS 1.3 forzado, certificate pinning en la app (react-native-ssl-pinning)
-- En reposo: pgsodium para columnas sensibles, Fernet para vectores en el engine
-- Borrado verificable: soft delete de usuarios + purga física a 30 días
+- COPPA (EE.UU.): verificación de edad, restricciones para <13
+- DSA Art. 28 (Europa): consentimiento parental por email para <16
+- GDPR: right to erasure, soft delete + purga en 30 días
+- LOPD (España): DPO designado, ROPA registrado
 
 ---
 
-## 11. Scripts de operaciones
+## 12. Analytics — solo 5 eventos (privacidad estricta)
 
-| Script | Propósito |
-|---|---|
-| `scripts/verify-integration.ts` | Verifica que las 3 capas están conectadas (10 checks) |
-| `scripts/security-audit.ts` | Auditoría de seguridad OWASP Mobile Top 10 adaptada |
-| `scripts/seed-team.ts` | Crea los 4 usuarios del equipo en staging |
-| `scripts/metrics-dashboard.ts` | Dashboard de métricas en tiempo real (actualiza cada 30s) |
-| `scripts/evaluate_matching.py` | Evalúa la calidad del matching con métricas proxy |
-| `scripts/generate-assets.js` | Genera assets placeholder (icon, splash) |
+```
+onboarding_started
+onboarding_completed
+match_received
+conversation_started
+contact_saved
+```
+
+IDs hasheados con SHA-256. Nunca contenido de mensajes ni datos identificables. Servidor europeo de PostHog.
 
 ---
 
-## 12. Variables de entorno
+## 13. Variables de entorno
 
-### apps/mobile (.env.staging / .env.production)
+### pulse-mobile (.env.local)
 ```
-EXPO_PUBLIC_SUPABASE_URL
-EXPO_PUBLIC_SUPABASE_ANON_KEY
-EXPO_PUBLIC_MATCHING_ENGINE_URL
-EXPO_PUBLIC_SENTRY_DSN
-EXPO_PUBLIC_POSTHOG_KEY
-EXPO_PUBLIC_ENV
-EXPO_PUBLIC_PROJECT_ID
-```
-
-### apps/backend (Supabase Secrets)
-```
-MATCHING_ENGINE_URL
-MATCHING_ENGINE_KEY
+EXPO_PUBLIC_SUPABASE_URL=https://ynjszpegtmtemckwgovr.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_CG8y4ZhlRKyQSFRqH8Fw4A_kbUAw0xe
+EXPO_PUBLIC_MATCHING_ENGINE_URL=https://pulse-matching-engine-production.up.railway.app
+EXPO_PUBLIC_ANTHROPIC_KEY=sk-ant-...
+EXPO_PUBLIC_REVENUECAT_ANDROID_KEY=test_FJkNKIYCGitzQvcxpLOXansfcRY
+EXPO_PUBLIC_PROJECT_ID=0eeaa082-4aeb-47df-9699-f30d621983fb
 ```
 
-### services/matching-engine (.env.local)
+### pulse-matching-engine (.env)
 ```
-SERVICE_KEY
-SUPABASE_URL
-SUPABASE_SERVICE_ROLE_KEY
-ENCRYPTION_KEY         # Fernet key en base64
-DP_EPSILON=0.5
-DP_DELTA=0.00001
-MODEL_NAME=paraphrase-multilingual-mpnet-base-v2
+SERVICE_KEY=...
+SUPABASE_URL=https://ynjszpegtmtemckwgovr.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=...
+```
+
+### pulse-parental (.env.local)
+```
+NEXT_PUBLIC_SUPABASE_URL=https://ynjszpegtmtemckwgovr.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_CG8y4ZhlRKyQSFRqH8Fw4A_kbUAw0xe
 ```
 
 ---
 
-## 13. CI/CD
+## 14. Credenciales y accesos
 
-### PR workflow (pr.yml)
-- Lint con Biome
-- Type-check con tsc
-- Tests unitarios con Jest (cobertura mínima 80%)
-- Tests Python con pytest (cobertura mínima 85%)
-- Comentario automático con reporte de cobertura en el PR
-
-### Main workflow (main.yml)
-- Todo lo anterior + tests de integración
-- Deploy de Edge Functions a Supabase
-- Build de staging con EAS
-
-### Release workflow (release.yml)
-- Build de producción firmado para iOS y Android
-- Submit automático a App Store y Google Play con EAS Submit
-- Tag de versión automático
-- Deploy de Edge Functions a producción
+```
+Supabase Project ID:      ynjszpegtmtemckwgovr
+Supabase URL:             https://ynjszpegtmtemckwgovr.supabase.co
+Supabase Publishable key: sb_publishable_CG8y4ZhlRKyQSFRqH8Fw4A_kbUAw0xe
+Expo account:             pulse-app73
+Expo Project ID:          0eeaa082-4aeb-47df-9699-f30d621983fb
+GitHub usuario:           SLH73
+RevenueCat Project ID:    185bf0ce
+Admin email:              admin@pulseapp.es
+Dispositivo de prueba:    Samsung Galaxy A32 5G
+```
 
 ---
 
-## 14. Métricas de North Star (primeros 6 meses)
+## 15. Estado actual del proyecto — abril 2026
+
+### Completado — App mobile
+- [x] Onboarding 5 preguntas con barra de progreso
+- [x] Estado emocional diario (mood) antes del match
+- [x] Revisión de identidad cada 90 días
+- [x] Home con match real, stats, timer y badge de mood
+- [x] Chat en tiempo real con Supabase Realtime
+- [x] Moderación proactiva con Claude API
+- [x] Extensión mutua del chat (72h x3 → permanente)
+- [x] Tarjeta viral compartible en mutual save
+- [x] Contactos reales desde saved_contacts
+- [x] Cápsula semanal con visual generativo
+- [x] Perfil con DepthMeter, badge Deep, InviteCard
+- [x] Pantalla Pulse Deep con RevenueCat
+- [x] Dashboard admin (solo admin@pulseapp.es)
+- [x] Notificaciones push remotas via Expo Push API
+- [x] Notificaciones locales diarias a las 18:00
+- [x] Verificación de edad (13-19) en registro
+- [x] Consentimiento parental menores de 14
+- [x] Política de privacidad y términos completos
+- [x] Botón eliminar cuenta con soft delete
+- [x] Prueba bidireccional verificada entre test2 y test3
+
+### Completado — Backend e infraestructura
+- [x] Supabase con todas las tablas y RLS
+- [x] 10+ funciones SQL implementadas
+- [x] Edge Functions: notify-match + onboarding + match + messages + contacts + invites
+- [x] Matching engine en Railway con boost de mood
+- [x] Panel parental en Vercel
+- [x] Landing page con lista de espera
+- [x] RevenueCat configurado (entitlement pulse_deep)
+
+### Pendiente antes del 1 de mayo
+- [ ] Notificaciones push: probar en Samsung Galaxy A32 5G
+- [ ] Llegar a 200 usuarios en lista de espera Madrid
+- [ ] Configurar producto en Google Play Console para Pulse Deep
+- [ ] Reemplazar API key test de RevenueCat por producción
+- [ ] Activación del geofencing por ciudad
+- [ ] Briefing al equipo de moderación
+
+---
+
+## 16. Métricas de North Star (primeros 6 meses)
 
 | Métrica | Objetivo | Estado |
 |---|---|---|
@@ -353,149 +394,29 @@ MODEL_NAME=paraphrase-multilingual-mpnet-base-v2
 | Tasa de contactos guardados | >30% de matches | Por medir |
 | Invite rate | >30% de usuarios usan su invite semanal | Por medir |
 
-### Señales para Serie A
-- 500.000 MAU con D30 retention >35%
-- NPS >70
-- Al menos una ciudad con densidad suficiente para demostrar efecto de red
-- Primeras señales de conversión a Pulse Deep (3–4%)
-
 ---
 
-## 15. Modelo de negocio
+## 17. Modelo de negocio
 
 ### Pulse Free (siempre gratis)
 - 1 conexión diaria
 - Conversaciones ilimitadas con contactos guardados
-- Cápsulas semanales
+- Cápsulas semanales (últimas 4 semanas)
 - 1 invite semanal
 
-### Pulse Deep (~4,99€/mes)
+### Pulse Deep (4,99€/mes)
 - Hasta 3 conexiones diarias
-- Audio efímero en conversaciones
-- Preguntas guiadas avanzadas
-- Pulse del mundo (conexiones fuera de tu ciudad)
-
-### Estimación con 10M MAU
-- 8% conversión → 800.000 usuarios de pago
-- 800.000 × 4,99€ = ~48M€ ARR
-- ARPU blended: ~4,80€/mes
-- LTV estimado (retención 18 meses): ~86€/usuario de pago
+- Explicación de compatibilidad en el match
+- Historial de cápsulas ilimitado
+- Estadísticas avanzadas del DepthMeter
+- Badge "Profundo" visible en el perfil
 
 ---
 
-## 16. Equipo y roles
+## 18. Datos del entorno de desarrollo
 
-| Rol | Responsabilidad | Stack |
-|---|---|---|
-| Perfil 1 — Fullstack / Tech Lead | Monorepo, backend, navegación, CI/CD | React Native, Supabase, Deno, GitHub Actions |
-| Perfil 2 — ML Engineer | Matching engine, embeddings, privacidad diferencial | Python, FastAPI, sentence-transformers, FAISS |
-| Perfil 3 — Mobile Engineer | Pantallas de contactos, cápsula, perfil | React Native, Reanimated, react-native-svg |
-| Perfil 4 — Founder / Product & Ops | Legal, compliance, primeros usuarios, inversores | — |
-
----
-
-## 17. Estado actual del proyecto
-
-### Completado
-- Concepto de producto y propuesta de valor
-- Arquitectura completa (ADRs documentados)
-- Schema de base de datos con RLS en todas las tablas
-- 5 Edge Functions implementadas y testeadas
-- Matching engine completo con FAISS, privacidad diferencial y cifrado
-- Frontend completo: todas las pantallas del MVP
-- Sistema de diseño con dark mode
-- CI/CD configurado
-- Scripts de integración, auditoría y monitorización
-
-### Completado — Semana 9 (dispositivo real)
-- [x] Node.js v24.14.1 instalado en Windows
-- [x] EAS CLI v18.6.0 instalado
-- [x] Git v2.53.0 instalado en Windows
-- [x] Cuenta Expo creada — username: **pulse-app73**
-- [x] Proyecto vinculado — ID: **0eeaa082-4aeb-47df-9699-f30d621983fb**
-- [x] Project URL: https://expo.dev/accounts/pulse-app73/projects/pulse-mobile
-- [x] GitHub: https://github.com/SLH73/pulse-mobile (privado)
-- [x] Expo Go instalado en Samsung Galaxy A32 5G
-- [x] Servidor local con `npx expo start` funcionando
-
-### MVP visual completo — todas las pantallas funcionando
-- [x] Onboarding 5 preguntas con barra de progreso y validación
-- [x] Home con match simulado, stats, contador 72h y botón de conversación
-- [x] Chat con burbujas de mensajes propios y ajenos
-- [x] Contactos con avatares generativos y lista
-- [x] Cápsula semanal con visual generativo y selector de semanas
-- [x] Perfil con DepthMeter animado, stats y acciones
-
-### Completado — Backend conectado
-- [x] Cuenta Supabase creada — proyecto: pulse-mobile
-- [x] Project ID: ynjszpegtmtemckwgovr
-- [x] Project URL: https://ynjszpegtmtemckwgovr.supabase.co
-- [x] Publishable key: sb_publishable_CG8y4ZhlRKyQSFRqH8Fw4A_kbUAw0xe
-- [x] Tablas creadas: users, daily_matches, messages, saved_contacts
-- [x] RLS activado en todas las tablas
-- [x] Autenticación email funcionando (confirm email desactivado para dev)
-- [x] Registro → Onboarding → datos guardados en tabla users ✓
-- [x] Cliente Supabase en src/lib/supabase.ts
-- [x] Variables de entorno en .env.local
-
-### Próximo paso — datos reales
-- [x] Chat en tiempo real con Supabase Realtime ✓
-- [x] Match del día real entre dos usuarios reales ✓
-- [x] Contactos reales desde tabla saved_contacts ✓
-- [x] Botón "Guardar" en chat funcional ✓
-- [x] increment_depth_score función en Supabase ✓
-- [x] Notificaciones locales diarias a las 18:00 ✓
-- [x] Verificacion de edad (13-19 anos) en registro ✓
-- [x] Aceptacion de terminos y condiciones ✓
-- [x] Aviso GDPR/LOPD en registro ✓
-- [x] Politica de privacidad completa (11 secciones, RGPD/LOPD) ✓
-- [x] Terminos y condiciones completos ✓
-- [x] Enlaces desde login y perfil funcionando ✓
-- [x] Rutas legales accesibles sin sesion iniciada ✓
-- [x] Boton eliminar cuenta y datos ✓ — con confirmacion y marca deletion_requested_at
-- [x] Consentimiento parental menores de 14 ✓ — campo email padre/tutor aparece automaticamente
-- [ ] Notificaciones push remotas (servidor → movil)
-- [x] Prueba del equipo completada ✓ — chat bidireccional verificado entre test2 y test3
-- [x] Matching engine desplegado en Railway ✓
-  - URL: https://pulse-matching-engine-production.up.railway.app
-  - GitHub: https://github.com/SLH73/pulse-matching-engine
-
-### Problema resuelto — Expo Go
-- Expo Go no cargaba → móvil y ordenador estaban en redes WiFi diferentes
-- Solución: conectar ambos a la misma red WiFi
-
-### Credenciales Supabase
 ```
-Project ID:      ynjszpegtmtemckwgovr
-URL:             https://ynjszpegtmtemckwgovr.supabase.co
-Publishable key: sb_publishable_CG8y4ZhlRKyQSFRqH8Fw4A_kbUAw0xe
-Organización:    Pulse App
-Plan:            Free
-```
-
-### Problemas resueltos durante el setup
-- AVG bloqueaba escritura de package-lock.json → mover proyecto a C:\Users\Javi\proyectos\ y añadir a exclusiones de AVG
-- react-native-reanimated 3.x incompatible con react-native 0.81.5 → eliminar del build base, añadir al integrar código Pulse
-- npm ci fallaba en EAS → .npmrc con legacy-peer-deps=true
-- App crasheaba al arrancar → añadir app/_layout.tsx y app/index.tsx mínimos
-- react-native-worklets-core instalado como dependencia de reanimated → también eliminado del build base
-
-### Pendiente — Semanas 10–12
-- [x] Landing page lista de espera en produccion ✓
-  - URL: https://slh73.github.io/pulse-landing
-  - GitHub: https://github.com/SLH73/pulse-landing
-  - Conectada a Supabase tabla waitlist
-  - Contador de inscritos en tiempo real
-- [ ] Llegar a 200 usuarios en lista de espera Madrid
-- Activación del geofencing por ciudad
-- Reclutamiento de primeros usuarios
-- Briefing al equipo de moderación
-- Análisis de métricas D1 y D7
-- Decisión de expansión o iteración
-
-### Datos del entorno de desarrollo (Windows)
-```
-Máquina:        Windows (C:\Users\Javi\proyectos\pulse-mobile)
+Máquina:        Windows (C:\Users\slope\)
 Node.js:        v24.14.1
 EAS CLI:        v18.6.0
 Git:            v2.53.0.windows.2
@@ -505,7 +426,7 @@ Expo account:   pulse-app73
 Project ID:     0eeaa082-4aeb-47df-9699-f30d621983fb
 Dispositivo:    Samsung Galaxy A32 5G (Android)
 App package:    com.pulseapp73.pulsemobile
-AVG Antivirus:  añadir C:\Users\Javi\proyectos a exclusiones para evitar bloqueos npm
+AVG Antivirus:  añadir C:\Users\slope\ a exclusiones para evitar bloqueos npm
 ```
 
 ### Cómo continuar desde otro PC
@@ -520,50 +441,31 @@ eas build --platform android --profile preview --non-interactive
 
 ---
 
-## 18. Comandos de uso frecuente
+## 19. Comandos de uso frecuente
 
 ```bash
-# Arrancar entorno local completo
-npm run dev                              # Turbo dev en todos los workspaces
-supabase start                           # Base de datos local
-docker-compose up                        # Matching engine local
+# App mobile
+cd C:\Users\slope\pulse-mobile
+npx expo start                    # Arrancar en local
+git add . && git commit -m "..." && git push origin master
 
-# Base de datos
-supabase db reset                        # Reset completo con seed
-supabase migration new nombre            # Nueva migration
-supabase db push                         # Aplicar migrations a staging
+# Matching engine
+cd C:\Users\slope\pulse-matching-engine
+git add . && git commit -m "..." && git push origin master
 
-# Tests
-npx turbo test                           # Todos los tests
-pytest services/matching-engine/tests/   # Solo tests del engine
-npx ts-node scripts/verify-integration.ts # Verificación E2E
+# Panel parental
+cd C:\Users\slope\pulse-parental
+git add . && git commit -m "..." && git push origin master
+# Deploy automático en Vercel al hacer push
+
+# Edge Functions
+npx supabase functions deploy notify-match --project-ref ynjszpegtmtemckwgovr
+npx supabase login  # si pide autenticación
 
 # Builds
-eas build --platform android --profile staging    # APK para Android
-eas build --platform ios --profile staging        # Build para iOS
-eas build:list                                    # Ver builds activos
-
-# Operaciones
-npx ts-node scripts/security-audit.ts   # Auditoría de seguridad
-npx ts-node scripts/metrics-dashboard.ts # Dashboard en tiempo real
-python scripts/evaluate_matching.py      # Calidad del matching
-
-# Deploy
-supabase functions deploy                # Deploy Edge Functions
-railway up                               # Deploy matching engine
+eas build --platform android --profile staging
+eas build:list
 ```
-
----
-
-## 19. Decisiones de arquitectura (ADRs resumen)
-
-| ADR | Decisión | Razón principal |
-|---|---|---|
-| ADR-001 | Supabase sobre Firebase | RLS granular, migraciones SQL auditables, pgsodium nativo |
-| ADR-002 | On-device ML para updates | El comportamiento del usuario nunca sale del dispositivo |
-| ADR-003 | Mensajería propia sobre Stream/Sendbird | Control total del ciclo de vida, sin tercer procesador de datos de menores |
-| ADR-004 | FAISS IVFFlat para escalado | Matching aproximado O(log n) con recall >95% |
-| ADR-005 | Verificación parental por email | Mecanismo legalmente defendible ante AEPD sin fricción extrema |
 
 ---
 
