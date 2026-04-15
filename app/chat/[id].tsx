@@ -4,12 +4,15 @@ import {
   Alert,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
+  Share,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import ViewShot from 'react-native-view-shot';
 import { supabase } from '../../src/lib/supabase';
 import { moderateMessage } from '../../src/lib/moderation';
 
@@ -54,25 +57,106 @@ function timerIsUrgent(expiresAt: string | null): boolean {
   return ms > 0 && ms < 6 * 3_600_000;
 }
 
+// Genera un color HSL determinista a partir de un string
+function seedToColor(seed: string): string {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const h = Math.abs(hash) % 360;
+  return `hsl(${h}, 60%, 65%)`;
+}
+
 // ────────────────────────────────────────────────────────────
-// Componente
+// Componente: tarjeta viral (se captura con ViewShot)
+// ────────────────────────────────────────────────────────────
+
+interface ShareCardProps {
+  matchId: string;
+}
+
+function ShareCard({ matchId }: ShareCardProps) {
+  const color1 = seedToColor(matchId);
+  const color2 = seedToColor(matchId + '_b');
+
+  return (
+    <View style={card.container}>
+      {/* Fondo con círculos generativos */}
+      <View style={[card.circle1, { backgroundColor: color1 }]} />
+      <View style={[card.circle2, { backgroundColor: color2 }]} />
+      <View style={[card.circle3, { backgroundColor: color1, opacity: 0.3 }]} />
+
+      {/* Contenido */}
+      <View style={card.content}>
+        <Text style={card.logo}>pulse</Text>
+        <Text style={card.mainText}>Conecte con{'\n'}alguien real</Text>
+        <Text style={card.subText}>Una conexion al dia.{'\n'}Eso es todo lo que necesitas.</Text>
+        <View style={card.badge}>
+          <Text style={card.badgeText}>pulseapp.es</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const card = StyleSheet.create({
+  container: {
+    width: 320, height: 320,
+    backgroundColor: '#0D0D0D',
+    borderRadius: 24,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  circle1: {
+    position: 'absolute', width: 200, height: 200,
+    borderRadius: 100, top: -40, right: -40, opacity: 0.25,
+  },
+  circle2: {
+    position: 'absolute', width: 150, height: 150,
+    borderRadius: 75, bottom: -30, left: -20, opacity: 0.2,
+  },
+  circle3: {
+    position: 'absolute', width: 100, height: 100,
+    borderRadius: 50, top: 60, left: 40,
+  },
+  content: {
+    alignItems: 'center', gap: 12, padding: 32, zIndex: 1,
+  },
+  logo:     { fontSize: 13, color: '#7F77DD', letterSpacing: 2, fontWeight: '500' },
+  mainText: { fontSize: 28, fontWeight: '500', color: '#F0F0EE', textAlign: 'center', lineHeight: 36 },
+  subText:  { fontSize: 14, color: '#8F8E8A', textAlign: 'center', lineHeight: 20 },
+  badge: {
+    backgroundColor: '#1A1A18', borderRadius: 20,
+    paddingHorizontal: 16, paddingVertical: 6,
+    borderWidth: 0.5, borderColor: '#2E2E2C',
+    marginTop: 8,
+  },
+  badgeText: { fontSize: 13, color: '#5F5E5A' },
+});
+
+// ────────────────────────────────────────────────────────────
+// Componente principal
 // ────────────────────────────────────────────────────────────
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
 
-  const [messages, setMessages]     = useState<Message[]>([]);
-  const [draft, setDraft]           = useState('');
-  const [userId, setUserId]         = useState<string | null>(null);
-  const [match, setMatch]           = useState<MatchState | null>(null);
-  const [timerLabel, setTimerLabel] = useState('...');
-  const [saving, setSaving]         = useState(false);
-  const [moderating, setModerating] = useState(false); // spinner mientras modera
-  const [blockedText, setBlockedText] = useState<string | null>(null); // aviso de bloqueo
+  const [messages, setMessages]       = useState<Message[]>([]);
+  const [draft, setDraft]             = useState('');
+  const [userId, setUserId]           = useState<string | null>(null);
+  const [match, setMatch]             = useState<MatchState | null>(null);
+  const [timerLabel, setTimerLabel]   = useState('...');
+  const [saving, setSaving]           = useState(false);
+  const [moderating, setModerating]   = useState(false);
+  const [blockedText, setBlockedText] = useState<string | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [sharing, setSharing]         = useState(false);
 
-  const listRef = useRef<FlatList>(null);
-  const isMock  = MOCK_IDS.includes(id ?? '');
+  const listRef    = useRef<FlatList>(null);
+  const viewShotRef = useRef<ViewShot>(null);
+  const isMock     = MOCK_IDS.includes(id ?? '');
 
   // ── Sesión ──────────────────────────────────────────────
   useEffect(() => {
@@ -126,7 +210,18 @@ export default function ChatScreen() {
         event: 'UPDATE', schema: 'public',
         table: 'daily_matches', filter: `id=eq.${id}`,
       }, (payload) => {
-        setMatch(payload.new as MatchState);
+        const newMatch = payload.new as MatchState;
+        const prev = match;
+
+        // Detectar nuevo mutual save para mostrar modal
+        if (prev && !prev.saved_by_a && newMatch.saved_by_a && newMatch.saved_by_b) {
+          setShowShareModal(true);
+        }
+        if (prev && !prev.saved_by_b && newMatch.saved_by_b && newMatch.saved_by_a) {
+          setShowShareModal(true);
+        }
+
+        setMatch(newMatch);
       })
       .subscribe();
 
@@ -154,7 +249,6 @@ export default function ChatScreen() {
     setDraft('');
     setBlockedText(null);
 
-    // Mock: sin moderación
     if (isMock) {
       setMessages(prev => [...prev, {
         id: Date.now().toString(), content: text,
@@ -164,19 +258,16 @@ export default function ChatScreen() {
       return;
     }
 
-    // ── Moderación ──────────────────────────────────────────
     setModerating(true);
     const modResult = await moderateMessage(text);
     setModerating(false);
 
     if (!modResult.approved) {
-      // Mensaje bloqueado — mostrar aviso
       setBlockedText(
         `Mensaje bloqueado por ${modResult.reason ?? 'contenido inapropiado'}. ` +
-        'Por favor, mantén un trato respetuoso.'
+        'Por favor, manten un trato respetuoso.'
       );
 
-      // Si score > 0.9 → insertar flag para revisión manual
       if (modResult.flag) {
         const maxScore = Math.max(
           modResult.scores.toxicity,
@@ -193,11 +284,9 @@ export default function ChatScreen() {
           reviewed:     false,
         });
       }
-
-      return; // No enviar el mensaje
+      return;
     }
 
-    // ── Mensaje aprobado → guardar en Supabase ──────────────
     await supabase.from('messages').insert({
       match_id:   id,
       sender_id:  userId,
@@ -236,20 +325,31 @@ export default function ChatScreen() {
     }
 
     if (result.status === 'mutual_save') {
-      if (result.permanent) {
-        Alert.alert('¡Conexion permanente!', 'Los dos habeis querido seguir. Esta conexion ya no expira.');
-      } else {
-        const extensionsLeft = 3 - result.mutual_save_count;
-        Alert.alert(
-          '¡Mutuo! Chat extendido 72h',
-          `Quedan ${extensionsLeft} extension${extensionsLeft === 1 ? '' : 'es'} posibles.`,
-        );
-      }
+      // Mostrar modal de compartir en mutual save
+      setShowShareModal(true);
     } else {
       Alert.alert(
         'Conexion guardada',
         'Has guardado esta conexion. Si la otra persona tambien guarda, el chat se extiende 72h mas.',
       );
+    }
+  };
+
+  // ── Compartir tarjeta viral ──────────────────────────────
+  const shareCard = async () => {
+    if (!viewShotRef.current || sharing) return;
+    setSharing(true);
+
+    try {
+      const uri = await viewShotRef.current.capture();
+      await Share.share({
+        url:     uri,
+        message: 'Conecte con alguien real en Pulse. Una conexion al dia. pulseapp.es',
+      });
+    } catch (e) {
+      console.log('[share] cancelado o error', e);
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -264,7 +364,6 @@ export default function ChatScreen() {
 
   // ── Banner dinámico ──────────────────────────────────────
   const renderBanner = () => {
-    // Aviso de moderación (prioridad máxima)
     if (blockedText) {
       return (
         <View style={[styles.banner, styles.bannerBlocked]}>
@@ -286,14 +385,19 @@ export default function ChatScreen() {
     if (iSaved && otherSaved && match && match.mutual_save_count > 0) {
       const extensionsLeft = 3 - match.mutual_save_count;
       return (
-        <View style={[styles.banner, styles.bannerMutual]}>
+        <TouchableOpacity
+          style={[styles.banner, styles.bannerMutual]}
+          onPress={() => setShowShareModal(true)}
+        >
           <Text style={styles.bannerTextMutual}>
             Guardado mutuamente · Chat extendido 72h ·{' '}
             {extensionsLeft > 0
-              ? `${extensionsLeft} extension${extensionsLeft === 1 ? '' : 'es'} posibles`
+              ? `${extensionsLeft} extensiones posibles`
               : 'Proxima extension sera permanente'}
+            {'  '}
+            <Text style={styles.bannerShare}>Compartir →</Text>
           </Text>
-        </View>
+        </TouchableOpacity>
       );
     }
 
@@ -311,7 +415,7 @@ export default function ChatScreen() {
       return (
         <View style={[styles.banner, styles.bannerSave]}>
           <Text style={styles.bannerTextSave}>
-            ¿Esta conexion vale la pena? Guardala antes de que expire.
+            Esta conexion vale la pena? Guardala antes de que expire.
           </Text>
         </View>
       );
@@ -400,7 +504,7 @@ export default function ChatScreen() {
           value={draft}
           onChangeText={(t) => {
             setDraft(t);
-            if (blockedText) setBlockedText(null); // limpiar aviso al escribir de nuevo
+            if (blockedText) setBlockedText(null);
           }}
           placeholder={moderating ? 'Comprobando mensaje...' : 'Escribe algo real...'}
           placeholderTextColor="#444441"
@@ -416,12 +520,59 @@ export default function ChatScreen() {
           <Text style={styles.sendBtnText}>{moderating ? '…' : '↑'}</Text>
         </TouchableOpacity>
       </View>
+
+      {/* MODAL DE COMPARTIR */}
+      <Modal
+        visible={showShareModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowShareModal(false)}
+      >
+        <View style={modal.overlay}>
+          <View style={modal.container}>
+
+            <Text style={modal.title}>¡Conexion real!</Text>
+            <Text style={modal.subtitle}>
+              Los dos habeis querido seguir. Comparte este momento.
+            </Text>
+
+            {/* Tarjeta que se captura */}
+            <ViewShot
+              ref={viewShotRef}
+              options={{ format: 'png', quality: 1.0 }}
+              style={modal.cardWrapper}
+            >
+              <ShareCard matchId={id ?? 'pulse'} />
+            </ViewShot>
+
+            {/* Botones */}
+            <TouchableOpacity
+              style={modal.shareBtn}
+              onPress={shareCard}
+              disabled={sharing}
+            >
+              <Text style={modal.shareBtnText}>
+                {sharing ? 'Preparando...' : 'Compartir'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={modal.skipBtn}
+              onPress={() => setShowShareModal(false)}
+            >
+              <Text style={modal.skipText}>Ahora no</Text>
+            </TouchableOpacity>
+
+          </View>
+        </View>
+      </Modal>
+
     </KeyboardAvoidingView>
   );
 }
 
 // ────────────────────────────────────────────────────────────
-// Estilos
+// Estilos principales
 // ────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
@@ -454,24 +605,18 @@ const styles = StyleSheet.create({
   bubbleOther: { backgroundColor: '#1A1A18', alignSelf: 'flex-start', borderBottomLeftRadius: 4 },
   bubbleText:  { fontSize: 15, lineHeight: 22 },
 
-  // Banners
   banner:               { padding: 12, borderTopWidth: 0.5 },
-
   bannerBlocked:        { backgroundColor: '#2A1A1A', borderTopColor: '#E05252' },
   bannerTextBlocked:    { fontSize: 13, color: '#E05252', textAlign: 'center' },
-
   bannerSave:           { backgroundColor: '#1D1D3A', borderTopColor: '#7F77DD' },
   bannerTextSave:       { fontSize: 13, color: '#7F77DD', textAlign: 'center' },
-
   bannerWaiting:        { backgroundColor: '#1A1A18', borderTopColor: '#5F5E5A' },
   bannerTextWaiting:    { fontSize: 13, color: '#8F8E8A', textAlign: 'center' },
-
   bannerMutual:         { backgroundColor: '#1A2A1A', borderTopColor: '#1D9E75' },
   bannerTextMutual:     { fontSize: 13, color: '#1D9E75', textAlign: 'center' },
-
+  bannerShare:          { color: '#7F77DD', fontWeight: '500' },
   bannerPermanent:      { backgroundColor: '#1A2A1A', borderTopColor: '#1D9E75' },
   bannerTextPermanent:  { fontSize: 13, color: '#1D9E75', textAlign: 'center', fontWeight: '500' },
-
   bannerInfo:           { backgroundColor: '#1A1A18', borderTopColor: '#2E2E2C' },
   bannerTextInfo:       { fontSize: 13, color: '#5F5E5A', textAlign: 'center' },
 
@@ -489,4 +634,34 @@ const styles = StyleSheet.create({
     width: 44, height: 44, alignItems: 'center', justifyContent: 'center',
   },
   sendBtnText: { fontSize: 18, color: '#0D0D0D', fontWeight: '500' },
+});
+
+// ────────────────────────────────────────────────────────────
+// Estilos modal
+// ────────────────────────────────────────────────────────────
+
+const modal = StyleSheet.create({
+  overlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.85)',
+    alignItems: 'center', justifyContent: 'center', padding: 24,
+  },
+  container: {
+    backgroundColor: '#1A1A18', borderRadius: 24,
+    padding: 24, alignItems: 'center', gap: 16,
+    borderWidth: 0.5, borderColor: '#2E2E2C', width: '100%',
+  },
+  title:    { fontSize: 22, fontWeight: '500', color: '#F0F0EE' },
+  subtitle: { fontSize: 14, color: '#8F8E8A', textAlign: 'center', lineHeight: 20 },
+
+  cardWrapper: { borderRadius: 24, overflow: 'hidden' },
+
+  shareBtn: {
+    backgroundColor: '#7F77DD', borderRadius: 12,
+    paddingHorizontal: 32, paddingVertical: 14,
+    width: '100%', alignItems: 'center',
+  },
+  shareBtnText: { fontSize: 16, fontWeight: '500', color: '#0D0D0D' },
+
+  skipBtn:  { paddingVertical: 8 },
+  skipText: { fontSize: 14, color: '#444441' },
 });
