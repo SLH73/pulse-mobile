@@ -38,51 +38,18 @@ export default function LoginScreen() {
     }
   };
 
-  // ✅ FIX BUG-003: Calcula edad real con fecha exacta
   const getAge = (): number => {
     const year = parseInt(birthYear);
-    const today = new Date();
-    const birthDate = new Date(year, 0, 1); // 1 enero del año de nacimiento
-    let age = today.getFullYear() - birthDate.getFullYear();
-    return age;
+    return new Date().getFullYear() - year;
   };
 
-  // ✅ FIX BUG-003: Bloquea correctamente < 13 y > 19
-  const validateAge = (): { valid: boolean; reason?: string } => {
+  const validateAge = (): boolean => {
     const age = getAge();
-    if (age < 13) return { valid: false, reason: 'menor13' };
-    if (age > 19) return { valid: false, reason: 'mayor19' };
-    return { valid: true };
+    return age >= 13 && age <= 19;
   };
 
-  // ✅ FIX BUG-003: Solo muestra consentimiento parental para 13 y 14, NO para <13
   const needsParentalConsent = (): boolean => {
-    if (birthYear.length !== 4) return false;
-    const age = getAge();
-    return age === 13 || age === 14;
-  };
-
-  // ✅ FIX BUG-001: Crea la fila en users tras el signup
-  const createUserProfile = async (userId: string) => {
-    const birthDate = birthYear.length === 4
-      ? `${birthYear}-01-01`
-      : null;
-
-    const { error } = await supabase
-      .from('users')
-      .insert({
-        id: userId,
-        email,
-        onboarding_complete: false,
-        depth_score: 0,
-        is_paused: false,
-        is_deep: false,
-        birth_date: birthDate, // ✅ FIX BUG-004: Guarda birth_date
-        parental_email: needsParentalConsent() && parentEmail ? parentEmail : null,
-        created_at: new Date().toISOString(),
-      });
-
-    if (error) console.error('Error creando perfil de usuario:', error);
+    return birthYear.length === 4 && getAge() < 14;
   };
 
   const handleAuth = async () => {
@@ -91,27 +58,19 @@ export default function LoginScreen() {
 
     if (isSignUp) {
       if (!birthYear || birthYear.length !== 4) {
-        setError('Introduce tu año de nacimiento (ej: 2008)');
+        setError('Introduce tu ano de nacimiento (ej: 2008)');
         return;
       }
-
-      // ✅ FIX BUG-003: Validación con mensaje específico por rango
-      const ageCheck = validateAge();
-      if (!ageCheck.valid) {
-        if (ageCheck.reason === 'menor13') {
-          setError('Lo sentimos, Pulse es solo para personas de 13 a 19 años.');
-        } else {
-          setError('Pulse es para personas de 13 a 19 años.');
-        }
+      if (!validateAge()) {
+        setError('Pulse es para personas de 13 a 19 anos.');
         return;
       }
-
       if (!acceptedTerms || !acceptedPrivacy) {
-        setError('Debes aceptar los términos y la política de privacidad.');
+        setError('Debes aceptar los terminos y la politica de privacidad.');
         return;
       }
       if (needsParentalConsent() && !parentEmail) {
-        setError('Al tener 13 o 14 años necesitas el email de un padre o tutor.');
+        setError('Al tener menos de 14 anos necesitas el email de un padre o tutor.');
         return;
       }
     }
@@ -120,32 +79,18 @@ export default function LoginScreen() {
 
     try {
       if (isSignUp) {
-        const { data, error } = await supabase.auth.signUp({ email, password });
+        const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-
-        // ✅ FIX BUG-001: Crear fila en users inmediatamente tras signup
-        if (data.user) {
-          await createUserProfile(data.user.id);
+        if (needsParentalConsent() && parentEmail) {
+          console.log('Consentimiento parental requerido para:', parentEmail);
         }
-
         await setupNotifications();
         router.replace('/onboarding/step0');
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         await setupNotifications();
-
-        // ✅ FIX BUG-005: Verificar onboarding_complete antes de navegar
-        const { data: userData } = await supabase
-          .from('users')
-          .select('onboarding_complete')
-          .single();
-
-        if (!userData?.onboarding_complete) {
-          router.replace('/onboarding/step0');
-        } else {
-          router.replace('/home');
-        }
+        router.replace('/home');
       }
     } catch (e: any) {
       setError(e.message);
@@ -171,7 +116,7 @@ export default function LoginScreen() {
           keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
 
         <TextInput style={styles.input} value={password} onChangeText={setPassword}
-          placeholder="Contraseña" placeholderTextColor="#444441" secureTextEntry />
+          placeholder="Contrasena" placeholderTextColor="#444441" secureTextEntry />
 
         {isSignUp && (
           <>
@@ -179,18 +124,17 @@ export default function LoginScreen() {
               style={styles.input}
               value={birthYear}
               onChangeText={setBirthYear}
-              placeholder="Año de nacimiento (ej: 2008)"
+              placeholder="Ano de nacimiento (ej: 2008)"
               placeholderTextColor="#444441"
               keyboardType="numeric"
               maxLength={4}
             />
 
-            {/* ✅ FIX BUG-003: Solo muestra consentimiento para 13-14, nunca para <13 */}
             {needsParentalConsent() && (
               <View style={styles.parentalBox}>
                 <Text style={styles.parentalTitle}>Consentimiento parental requerido</Text>
                 <Text style={styles.parentalText}>
-                  Al tener 13 o 14 años, necesitamos el email de tu padre, madre o tutor legal.
+                  Al tener menos de 14 anos, necesitamos el email de tu padre, madre o tutor legal.
                 </Text>
                 <TextInput
                   style={styles.input}
@@ -206,21 +150,21 @@ export default function LoginScreen() {
 
             <TouchableOpacity style={styles.checkRow} onPress={() => setAcceptedTerms(!acceptedTerms)}>
               <View style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}>
-                {acceptedTerms && <Text style={styles.checkmark}>✓</Text>}
+                {acceptedTerms && <Text style={styles.checkmark}>v</Text>}
               </View>
               <Text style={styles.checkLabel}>
                 Acepto los{' '}
-                <Text style={styles.link} onPress={() => router.push('/legal/terms')}>términos y condiciones</Text>
+                <Text style={styles.link} onPress={() => router.push('/legal/terms')}>terminos y condiciones</Text>
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.checkRow} onPress={() => setAcceptedPrivacy(!acceptedPrivacy)}>
               <View style={[styles.checkbox, acceptedPrivacy && styles.checkboxChecked]}>
-                {acceptedPrivacy && <Text style={styles.checkmark}>✓</Text>}
+                {acceptedPrivacy && <Text style={styles.checkmark}>v</Text>}
               </View>
               <Text style={styles.checkLabel}>
                 Acepto la{' '}
-                <Text style={styles.link} onPress={() => router.push('/legal/privacy')}>política de privacidad</Text>
+                <Text style={styles.link} onPress={() => router.push('/legal/privacy')}>politica de privacidad</Text>
               </Text>
             </TouchableOpacity>
 
@@ -245,20 +189,9 @@ export default function LoginScreen() {
 
         <TouchableOpacity onPress={() => { setIsSignUp(!isSignUp); setError(''); }}>
           <Text style={styles.switchText}>
-            {isSignUp ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
+            {isSignUp ? 'Ya tienes cuenta? Inicia sesion' : 'No tienes cuenta? Registrate'}
           </Text>
         </TouchableOpacity>
-
-        {/* ✅ FIX BUG-020: Links legales visibles en login sin sesión */}
-        <View style={styles.legalRow}>
-          <Text style={styles.legalLink} onPress={() => router.push('/legal/privacy')}>
-            Política de privacidad
-          </Text>
-          <Text style={styles.legalSep}> · </Text>
-          <Text style={styles.legalLink} onPress={() => router.push('/legal/terms')}>
-            Términos y condiciones
-          </Text>
-        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -301,8 +234,5 @@ const styles = StyleSheet.create({
     padding: 16, alignItems: 'center', marginBottom: 16, marginTop: 8,
   },
   btnText: { fontSize: 16, fontWeight: '500', color: '#0D0D0D' },
-  switchText: { fontSize: 14, color: '#7F77DD', textAlign: 'center', marginBottom: 16 },
-  legalRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 8 },
-  legalLink: { fontSize: 12, color: '#5F5E5A' },
-  legalSep: { fontSize: 12, color: '#5F5E5A' },
+  switchText: { fontSize: 14, color: '#7F77DD', textAlign: 'center' },
 });

@@ -4,6 +4,10 @@ import { supabase } from '../../src/lib/supabase';
 import { getIsDeep } from '../../src/lib/revenuecat';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+// ────────────────────────────────────────────────────────────
+// Constantes
+// ────────────────────────────────────────────────────────────
+
 const ADMIN_EMAIL = 'admin@pulseapp.es';
 
 const DEPTH_LEVELS = [
@@ -18,88 +22,42 @@ function getLevel(score: number) {
   return [...DEPTH_LEVELS].reverse().find(l => score >= l.min) ?? DEPTH_LEVELS[0];
 }
 
-interface UserProfile {
-  depth_score: number;
-  city: string | null;
-  created_at: string;
-}
+const MOCK_PROFILE = {
+  depth_score:         5,
+  city:                'Madrid',
+  total_contacts:      3,
+  total_conversations: 8,
+  member_since:        'abril 2026',
+};
+
+// ────────────────────────────────────────────────────────────
+// Componente
+// ────────────────────────────────────────────────────────────
 
 export default function ProfileScreen() {
   const router = useRouter();
 
-  const [isAdmin, setIsAdmin]   = useState(false);
-  const [isDeep, setIsDeep]     = useState(false);
-  const [profile, setProfile]   = useState<UserProfile | null>(null);
-  const [contacts, setContacts] = useState(0);
-  const [convs, setConvs]       = useState(0);
-  const [loading, setLoading]   = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isDeep, setIsDeep]   = useState(false);
+
+  const level    = getLevel(MOCK_PROFILE.depth_score);
+  const progress = Math.min(MOCK_PROFILE.depth_score / 30, 1);
 
   useEffect(() => {
-    loadProfile();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user?.email === ADMIN_EMAIL) setIsAdmin(true);
+    });
+
+    // Comprobar estado Deep
+    getIsDeep().then(setIsDeep).catch(() => setIsDeep(false));
   }, []);
 
-  const loadProfile = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      if (user.email === ADMIN_EMAIL) setIsAdmin(true);
-      getIsDeep().then(setIsDeep).catch(() => setIsDeep(false));
-
-      // Cargar perfil real desde Supabase
-      const { data: userData } = await supabase
-        .from('users')
-        .select('depth_score, city, created_at')
-        .eq('id', user.id)
-        .single();
-
-      if (userData) setProfile(userData);
-
-      // Contar contactos reales
-      const { count: contactCount } = await supabase
-        .from('saved_contacts')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
-
-      setContacts(contactCount ?? 0);
-
-      // Contar conversaciones reales
-      const { count: convCount } = await supabase
-        .from('messages')
-        .select('*', { count: 'exact', head: true })
-        .eq('sender_id', user.id);
-
-      setConvs(convCount ?? 0);
-
-    } catch (e) {
-      console.error('Error cargando perfil:', e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getMemberSince = () => {
-    if (!profile?.created_at) return '';
-    const date = new Date(profile.created_at);
-    return date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-  };
-
-  const depthScore = profile?.depth_score ?? 0;
-  const level      = getLevel(depthScore);
-  const progress   = Math.min(depthScore / 30, 1);
-
-  // FIX BUG-002: Cerrar sesion correctamente sin abrir navegador externo
+  // ── Acciones ─────────────────────────────────────────────
   const handleSignOut = async () => {
-    try {
-      await supabase.auth.signOut();
-      router.replace('/auth/login');
-    } catch (e) {
-      console.error('Error cerrando sesion:', e);
-      router.replace('/auth/login');
-    }
+    await supabase.auth.signOut();
+    router.replace('/auth/login');
   };
 
-  // FIX BUG-014: Guardar deletion_requested_at correctamente antes del signOut
   const handleDeleteAccount = async () => {
     Alert.alert(
       'Eliminar cuenta',
@@ -113,23 +71,14 @@ export default function ProfileScreen() {
             try {
               const { data: { user } } = await supabase.auth.getUser();
               if (!user) return;
-
-              const { error } = await supabase
+              await supabase
                 .from('users')
                 .update({ deletion_requested_at: new Date().toISOString() })
                 .eq('id', user.id);
-
-              if (error) {
-                console.error('Error marcando eliminacion:', error);
-                Alert.alert('Error', 'No se pudo procesar la solicitud. Intentalo de nuevo.');
-                return;
-              }
-
               await supabase.auth.signOut();
               router.replace('/auth/login');
-            } catch (e) {
-              console.error('Error eliminando cuenta:', e);
-              Alert.alert('Error', 'No se pudo eliminar la cuenta. Intentalo de nuevo.');
+            } catch {
+              Alert.alert('Error', 'No se pudo eliminar la cuenta. Intenta de nuevo.');
             }
           },
         },
@@ -137,14 +86,9 @@ export default function ProfileScreen() {
     );
   };
 
-  if (loading) {
-    return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>Perfil</Text>
-        <Text style={{ color: '#5F5E5A', textAlign: 'center', marginTop: 40 }}>Cargando...</Text>
-      </ScrollView>
-    );
-  }
+  // ────────────────────────────────────────────────────────
+  // Render
+  // ────────────────────────────────────────────────────────
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
@@ -156,6 +100,7 @@ export default function ProfileScreen() {
           <View style={styles.avatar}>
             <Text style={styles.avatarSymbol}>✦</Text>
           </View>
+          {/* Badge Deep */}
           {isDeep && (
             <View style={styles.deepBadge}>
               <Text style={styles.deepBadgeText}>✦ Profundo</Text>
@@ -163,40 +108,44 @@ export default function ProfileScreen() {
           )}
         </View>
         <Text style={[styles.levelText, { color: level.color }]}>{level.label}</Text>
-        <Text style={styles.depthScore}>{depthScore}</Text>
+        <Text style={styles.depthScore}>{MOCK_PROFILE.depth_score}</Text>
         <View style={styles.track}>
           <View style={[styles.fill, { width: `${progress * 100}%`, backgroundColor: level.color }]} />
         </View>
         <Text style={styles.hint}>Cada conexion guardada suma un punto</Text>
-        {profile?.created_at && (
-          <Text style={styles.memberSince}>En Pulse desde {getMemberSince()}</Text>
-        )}
+        <Text style={styles.memberSince}>En Pulse desde {MOCK_PROFILE.member_since}</Text>
       </View>
 
-      {/* STATS reales */}
+      {/* STATS */}
       <View style={styles.statsRow}>
         <View style={styles.stat}>
-          <Text style={styles.statValue}>{convs}</Text>
+          <Text style={styles.statValue}>{MOCK_PROFILE.total_conversations}</Text>
           <Text style={styles.statLabel}>conversaciones</Text>
         </View>
         <View style={styles.stat}>
-          <Text style={styles.statValue}>{contacts}</Text>
+          <Text style={styles.statValue}>{MOCK_PROFILE.total_contacts}</Text>
           <Text style={styles.statLabel}>contactos</Text>
         </View>
         <View style={styles.stat}>
-          <Text style={styles.statValue}>{profile?.city ?? '-'}</Text>
+          <Text style={styles.statValue}>{MOCK_PROFILE.city}</Text>
           <Text style={styles.statLabel}>ciudad</Text>
         </View>
       </View>
 
-      {/* PULSE DEEP */}
+      {/* PULSE DEEP — CTA o estado activo */}
       {isDeep ? (
-        <TouchableOpacity style={styles.deepActiveRow} onPress={() => router.push('/deep')}>
+        <TouchableOpacity
+          style={styles.deepActiveRow}
+          onPress={() => router.push('/deep')}
+        >
           <Text style={styles.deepActiveText}>✦ Pulse Deep activo</Text>
           <Text style={styles.actionArrow}>›</Text>
         </TouchableOpacity>
       ) : (
-        <TouchableOpacity style={styles.deepCtaCard} onPress={() => router.push('/deep')}>
+        <TouchableOpacity
+          style={styles.deepCtaCard}
+          onPress={() => router.push('/deep')}
+        >
           <View style={styles.deepCtaLeft}>
             <Text style={styles.deepCtaTitle}>✦ Pulse Deep</Text>
             <Text style={styles.deepCtaSubtitle}>3 conexiones al dia · Explicacion de compatibilidad</Text>
@@ -231,6 +180,7 @@ export default function ProfileScreen() {
         <Text style={styles.actionArrow}>›</Text>
       </TouchableOpacity>
 
+      {/* ADMIN */}
       {isAdmin && (
         <TouchableOpacity style={styles.adminRow} onPress={() => router.push('/admin')}>
           <Text style={styles.adminText}>Panel de administracion</Text>
@@ -245,10 +195,15 @@ export default function ProfileScreen() {
   );
 }
 
+// ────────────────────────────────────────────────────────────
+// Estilos
+// ────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   container:  { flex: 1, backgroundColor: '#0D0D0D' },
   scroll:     { padding: 24, paddingTop: 48, paddingBottom: 48 },
   title:      { fontSize: 28, fontWeight: '500', color: '#F0F0EE', marginBottom: 24 },
+
   heroCard: {
     backgroundColor: '#1A1A18', borderRadius: 16,
     padding: 24, alignItems: 'center',
@@ -260,12 +215,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#EEEDFE', alignItems: 'center', justifyContent: 'center',
   },
   avatarSymbol: { fontSize: 32, color: '#534AB7' },
+
+  // Badge Deep
   deepBadge: {
     backgroundColor: '#1D1D3A', borderRadius: 20,
     paddingHorizontal: 12, paddingVertical: 4,
     borderWidth: 1, borderColor: '#7F77DD',
   },
   deepBadgeText: { fontSize: 12, color: '#7F77DD', fontWeight: '600' },
+
   levelText:   { fontSize: 15, fontWeight: '500', marginBottom: 4 },
   depthScore:  { fontSize: 36, fontWeight: '500', color: '#F0F0EE', marginBottom: 12 },
   track: {
@@ -275,6 +233,7 @@ const styles = StyleSheet.create({
   fill:        { height: '100%', borderRadius: 99 },
   hint:        { fontSize: 12, color: '#5F5E5A', marginBottom: 4 },
   memberSince: { fontSize: 12, color: '#444441' },
+
   statsRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   stat: {
     flex: 1, backgroundColor: '#1A1A18',
@@ -283,6 +242,8 @@ const styles = StyleSheet.create({
   },
   statValue: { fontSize: 18, fontWeight: '500', color: '#F0F0EE', marginBottom: 4 },
   statLabel: { fontSize: 11, color: '#5F5E5A' },
+
+  // Pulse Deep CTA
   deepCtaCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#1D1D3A', borderRadius: 14,
@@ -293,6 +254,8 @@ const styles = StyleSheet.create({
   deepCtaTitle:    { fontSize: 15, fontWeight: '600', color: '#7F77DD' },
   deepCtaSubtitle: { fontSize: 12, color: '#5F5E5A' },
   deepCtaPrice:    { fontSize: 14, fontWeight: '500', color: '#7F77DD' },
+
+  // Deep activo
   deepActiveRow: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', paddingVertical: 16,
@@ -300,6 +263,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   deepActiveText: { fontSize: 15, color: '#1D9E75', fontWeight: '500' },
+
+  // Acciones
   actionRow: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', paddingVertical: 16,
@@ -307,6 +272,7 @@ const styles = StyleSheet.create({
   },
   actionText:  { fontSize: 15, color: '#F0F0EE' },
   actionArrow: { fontSize: 20, color: '#2E2E2C' },
+
   adminRow: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', paddingVertical: 16,
@@ -314,6 +280,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   adminText: { fontSize: 15, color: '#7F77DD' },
+
   backBtn:  { marginTop: 32 },
   backText: { fontSize: 15, color: '#7F77DD' },
 });

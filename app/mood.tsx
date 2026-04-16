@@ -51,16 +51,54 @@ export default function MoodScreen() {
   const router   = useRouter();
   const [selected, setSelected] = useState<Mood | null>(null);
   const [saving, setSaving]     = useState(false);
+  const [checking, setChecking] = useState(true);
 
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
 
   useEffect(() => {
+    checkMoodToday();
+  }, []);
+
+  // ✅ FIX BUG-006: Verificar si ya se seleccionó mood hoy antes de mostrar la pantalla
+  const checkMoodToday = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.replace('/home'); return; }
+
+      const { data } = await supabase
+        .from('users')
+        .select('mood_updated_at')
+        .eq('id', user.id)
+        .single();
+
+      if (data?.mood_updated_at) {
+        const moodDate = new Date(data.mood_updated_at);
+        const today    = new Date();
+
+        const isSameDay =
+          moodDate.getFullYear() === today.getFullYear() &&
+          moodDate.getMonth()    === today.getMonth()    &&
+          moodDate.getDate()     === today.getDate();
+
+        if (isSameDay) {
+          // Ya seleccionó mood hoy — ir directo a home
+          router.replace('/home');
+          return;
+        }
+      }
+    } catch (e) {
+      console.error('Error comprobando mood:', e);
+    } finally {
+      setChecking(false);
+    }
+
+    // Animar entrada solo si debe mostrarse
     Animated.parallel([
       Animated.timing(fadeAnim,  { toValue: 1, duration: 400, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
     ]).start();
-  }, []);
+  };
 
   const selectMood = async (mood: Mood) => {
     if (saving) return;
@@ -83,6 +121,11 @@ export default function MoodScreen() {
   const skip = () => {
     router.replace('/home');
   };
+
+  // Mostrar nada mientras comprueba para evitar flash de pantalla
+  if (checking) {
+    return <View style={styles.container} />;
+  }
 
   return (
     <View style={styles.container}>
