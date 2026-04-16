@@ -480,3 +480,132 @@ Problema: [si hay un error, pégalo aquí completo]
 ```
 
 El modelo tiene contexto completo del producto, arquitectura, stack, código y estado del proyecto con este fichero.
+
+---
+
+## 21. QA — Resultados sesión de pruebas (16 abril 2026)
+
+> Sesión de QA completa ejecutada el 16 de abril de 2026 con dispositivo Samsung Galaxy A32 5G.
+> Total pruebas ejecutadas: 115 | Superadas: 75 | Fallidas/Parciales: 40
+
+### Resumen por bloque
+
+| Bloque | Pruebas | Superadas | % |
+|---|---|---|---|
+| 1 — Autenticación | 10 | 9 | 90% |
+| 2 — Onboarding | 6 | 0 | 0% ⛔ Bloqueado |
+| 3 — Mood | 6 | 5 | 83% |
+| 4 — Home y match | 9 | 7 | 78% |
+| 5 — Chat | 11 | 8 | 73% |
+| 6 — Extensión mutua | 8 | 0 | ⏳ Pendiente — requiere 2 dispositivos |
+| 7 — Contactos | 4 | 3 | 75% |
+| 8 — Cápsula | 5 | 4 | 80% |
+| 9 — Perfil | 13 | 10 | 77% |
+| 10 — Admin | 7 | 2 | 29% |
+| 11 — Revisión identidad | 8 | 6 | 75% |
+| 12 — Notificaciones | 5 | 3 | 60% |
+| 13 — Pulse Deep | 5 | 4 | 80% |
+| 14 — Panel parental | 8 | 6 | 75% |
+| 15 — Legal | 4 | 4 | 100% |
+| 16 — Seguridad | 6 | 4 | 67% |
+
+---
+
+### 🔴 Bugs críticos — bloquean lanzamiento
+
+| ID | Componente | Descripción | Fix requerido |
+|---|---|---|---|
+| BUG-001 | Auth / Supabase | Trigger `on_auth_user_created` ausente en código — tabla `users` no se puebla al registrar | Añadir trigger y función `handle_new_user()` al proyecto — mitigado manualmente en Supabase |
+| BUG-002 | Perfil / Auth | Cerrar sesión abre navegador externo en lugar de redirigir a login | Reemplazar `Linking.openURL()` por `supabase.auth.signOut()` + `router.replace('/login')` |
+| BUG-003 | Registro / Edad | Menores de 13 no se bloquean — violación GDPR Art. 8 | Corregir lógica: `if (age < 13) → bloquear` — actualmente muestra consentimiento parental en lugar de bloqueo |
+| BUG-005 | Onboarding / Nav | Onboarding completamente inaccesible — usuarios con `onboarding_complete = false` van directo a home | Corregir lógica de navegación post-login para verificar `onboarding_complete` |
+| BUG-008 | Chat / Match | Usuarios del mismo match cargan chats diferentes — test2 y test3 ven match_ids distintos | Corregir query de match activo: `ORDER BY created_at DESC LIMIT 1` filtrando por `expires_at > NOW()` |
+| BUG-013 | Cápsula | Cápsula muestra datos de otros usuarios — usuarios nuevos ven conversaciones ajenas | Añadir filtro `WHERE user_id = $userId` en query de cápsula |
+| BUG-014 | Perfil / GDPR | Eliminar cuenta no marca `deletion_requested_at` en Supabase | Fix en función de eliminación — actualmente hace logout pero no actualiza la BD |
+| BUG-017 | Notificaciones | Notificación push no abre la app cuando está cerrada (cold start) | Configurar deep linking en Android — añadir `intentFilters` en app.json |
+| BUG-018 | Panel parental | Panel parental inaccesible — RLS bloquea búsqueda por `parental_email` con `anon_key` | Usar `SUPABASE_SERVICE_ROLE_KEY` en panel parental en lugar de `anon_key` |
+| BUG-019 | Panel parental | Pausar/reanudar app no actualiza `is_paused` en Supabase — UI se actualiza pero BD no | Misma causa que BUG-018 — usar Service Role Key para UPDATEs |
+| BUG-020 | Login / Legal | Links a política de privacidad y T&C no visibles en pantalla de login | Añadir links legales en `login.tsx` — actualmente solo visibles en registro |
+
+---
+
+### 🟡 Bugs medios — no bloquean lanzamiento
+
+| ID | Componente | Descripción | Fix requerido |
+|---|---|---|---|
+| BUG-006 | Mood / Cliente | Mood aparece múltiples veces el mismo día — lógica de fecha incorrecta en cliente | Comparar `mood_updated_at` con fecha de hoy antes de mostrar pantalla mood |
+| BUG-007 | Chat / Layout | Input del chat superpuesto con barra de navegación Android | Añadir `KeyboardAvoidingView` con `behavior="height"` en componente chat |
+| BUG-009 | Moderación | Moderación no detecta mensajes cortos con lenguaje tóxico ("te odio" pasa, "eres un idiota y te odio" se bloquea) | Ajustar umbral de moderación para mensajes cortos |
+| BUG-010 | Contactos | Avatares generativos no visibles en lista de contactos | Revisar renderizado del componente SVG generativo |
+| BUG-011 | Contactos | Contactos muestran "Conexión guardada" + fecha en lugar del nombre del usuario | Añadir JOIN con tabla `users` en query de contactos |
+| BUG-015 | Admin | Dashboard admin falla con error `column "created_at" does not exist` — `saved_contacts` usa `saved_at` | Cambiar `created_at` por `saved_at` en query del dashboard admin |
+| BUG-016 | Revisión | Botón "Saltar por ahora" no visible en pantalla de revisión de identidad | Añadir botón de skip en `review.tsx` |
+
+---
+
+### ⚠️ Bugs menores
+
+| ID | Componente | Descripción |
+|---|---|---|
+| BUG-004 | Registro | `birth_date` no se guarda en tabla `users` al registrarse |
+
+---
+
+### Mitigaciones aplicadas manualmente en Supabase (16 abril 2026)
+
+Las siguientes correcciones se aplicaron directamente en Supabase durante la sesión de QA para poder continuar las pruebas. **Deben implementarse también en el código del proyecto:**
+
+```sql
+-- 1. Función y trigger para crear fila en users al registrarse
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.users (id, email, onboarding_complete, depth_score, created_at, is_paused, is_deep)
+  VALUES (NEW.id, NEW.email, false, 0, NOW(), false, false);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- 2. Política RLS para panel parental (temporal — reemplazar por Service Role Key)
+CREATE POLICY "parental_access" ON public.users FOR SELECT USING (true);
+CREATE POLICY "parental_update" ON public.users FOR UPDATE USING (true);
+
+-- 3. Contraseña admin reseteada
+UPDATE auth.users SET encrypted_password = crypt('Admin2026$', gen_salt('bf')) WHERE email = 'admin@pulseapp.es';
+```
+
+---
+
+### Usuarios de prueba — estado tras QA
+
+| Email | Estado | Notas |
+|---|---|---|
+| test2@example.com | ✅ Activo | onboarding_complete=true, depth_score=2, mood=listen |
+| test3@example.com | ✅ Activo | onboarding_complete=true, depth_score=1 |
+| test4@example.com | ✅ Activo | onboarding_complete=true |
+| test5@example.com | ⚠️ Parcial | onboarding_complete=false, parental_email=padre@example.com, is_paused=false |
+| test6@example.com | 🗑️ Eliminado | Cuenta eliminada durante prueba #70 |
+| admin@pulseapp.es | ✅ Activo | Contraseña: Admin2026$ |
+
+---
+
+### Veredicto final
+
+**❌ NO LISTO PARA LANZAR — 16 abril 2026**
+
+11 bugs críticos deben corregirse antes del 1 de mayo. Prioridad de corrección:
+
+1. BUG-003 — Menores de 13 sin bloqueo (legal urgente)
+2. BUG-014 — Eliminación cuenta sin registro (legal urgente)
+3. BUG-005 — Onboarding inaccesible (core)
+4. BUG-008 — Chat carga match incorrecto (core)
+5. BUG-001 — Trigger ausente en código (infraestructura)
+6. BUG-002 — Cerrar sesión roto (UX crítica)
+7. BUG-013 — Cápsula datos incorrectos (privacidad)
+8. BUG-017 — Notificaciones no abren app (retención)
+9. BUG-018/019 — Panel parental inoperativo (legal menores)
+10. BUG-020 — Links legales en login (compliance)
