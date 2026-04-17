@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Alert,
   FlatList,
@@ -155,9 +156,10 @@ export default function ChatScreen() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [sharing, setSharing]         = useState(false);
 
-  const listRef    = useRef<FlatList>(null);
+  const listRef     = useRef<FlatList>(null);
   const viewShotRef = useRef<ViewShot>(null);
-  const isMock     = MOCK_IDS.includes(id ?? '');
+  const isMock      = MOCK_IDS.includes(id ?? '');
+  const insets      = useSafeAreaInsets();
 
   // ── Sesión ──────────────────────────────────────────────
   useEffect(() => {
@@ -499,7 +501,7 @@ export default function ChatScreen() {
       {renderBanner()}
 
       {/* INPUT */}
-      <View style={styles.inputRow}>
+      <View style={[styles.inputRow, { paddingBottom: 12 + insets.bottom }]}>
         <TextInput
           style={styles.input}
           value={draft}
