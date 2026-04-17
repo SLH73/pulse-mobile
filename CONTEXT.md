@@ -570,12 +570,20 @@ El modelo tiene contexto completo del producto, arquitectura, stack, código y e
 > Todos los bugs del QA corregidos. Código en producción. Pendientes solo operacionales.
 
 ### Commits aplicados
-- `pulse-mobile` master: `e2f5eef7` — todos los fixes + migraciones SQL
+- `pulse-mobile` master: `75591e8f` — todos los fixes + migraciones SQL + bugs post-QA
 - `pulse-parental` master: `99795b7` — API Routes server-side (Vercel redesplegado)
 
 ### Migraciones Supabase aplicadas
 - `20260417_fix_get_admin_metrics.sql` — `get_admin_metrics` usa `saved_at`
 - `20260418_create_weekly_capsules.sql` — tabla `weekly_capsules` con RLS
+
+### Bugs adicionales corregidos post-QA (17 abril 2026)
+
+| Bug | Fix |
+|---|---|
+| `weekly_capsules` no existía (PGRST205) | Migración `20260418_create_weekly_capsules.sql` + error silenciado en capsule screen |
+| Mood "Saltar por hoy" bucle infinito con home | `skip()` llama a `set_daily_mood(rest)` antes de navegar |
+| Botones Android tapan "Cerrar sesión" en perfil | `useSafeAreaInsets().bottom` en `paddingBottom` del ScrollView |
 
 ### Veredicto
 
