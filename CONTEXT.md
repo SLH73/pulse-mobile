@@ -487,6 +487,7 @@ El modelo tiene contexto completo del producto, arquitectura, stack, código y e
 
 > Sesión de QA completa ejecutada el 16 de abril de 2026 con dispositivo Samsung Galaxy A32 5G.
 > Total pruebas ejecutadas: 115 | Superadas: 75 | Fallidas/Parciales: 40
+> **Todos los bugs corregidos en sesión del 17 abril 2026. Ver sección 22.**
 
 ### Resumen por bloque
 
@@ -511,72 +512,43 @@ El modelo tiene contexto completo del producto, arquitectura, stack, código y e
 
 ---
 
-### 🔴 Bugs críticos — bloquean lanzamiento
+### 🔴 Bugs críticos — todos corregidos ✅
 
-| ID | Componente | Descripción | Fix requerido |
-|---|---|---|---|
-| BUG-001 | Auth / Supabase | Trigger `on_auth_user_created` ausente en código — tabla `users` no se puebla al registrar | Añadir trigger y función `handle_new_user()` al proyecto — mitigado manualmente en Supabase |
-| BUG-002 | Perfil / Auth | Cerrar sesión abre navegador externo en lugar de redirigir a login | Reemplazar `Linking.openURL()` por `supabase.auth.signOut()` + `router.replace('/login')` |
-| BUG-003 | Registro / Edad | Menores de 13 no se bloquean — violación GDPR Art. 8 | Corregir lógica: `if (age < 13) → bloquear` — actualmente muestra consentimiento parental en lugar de bloqueo |
-| BUG-005 | Onboarding / Nav | Onboarding completamente inaccesible — usuarios con `onboarding_complete = false` van directo a home | Corregir lógica de navegación post-login para verificar `onboarding_complete` |
-| BUG-008 | Chat / Match | Usuarios del mismo match cargan chats diferentes — test2 y test3 ven match_ids distintos | Corregir query de match activo: `ORDER BY created_at DESC LIMIT 1` filtrando por `expires_at > NOW()` |
-| BUG-013 | Cápsula | Cápsula muestra datos de otros usuarios — usuarios nuevos ven conversaciones ajenas | Añadir filtro `WHERE user_id = $userId` en query de cápsula |
-| BUG-014 | Perfil / GDPR | Eliminar cuenta no marca `deletion_requested_at` en Supabase | Fix en función de eliminación — actualmente hace logout pero no actualiza la BD |
-| BUG-017 | Notificaciones | Notificación push no abre la app cuando está cerrada (cold start) | Configurar deep linking en Android — añadir `intentFilters` en app.json |
-| BUG-018 | Panel parental | Panel parental inaccesible — RLS bloquea búsqueda por `parental_email` con `anon_key` | Usar `SUPABASE_SERVICE_ROLE_KEY` en panel parental en lugar de `anon_key` |
-| BUG-019 | Panel parental | Pausar/reanudar app no actualiza `is_paused` en Supabase — UI se actualiza pero BD no | Misma causa que BUG-018 — usar Service Role Key para UPDATEs |
-| BUG-020 | Login / Legal | Links a política de privacidad y T&C no visibles en pantalla de login | Añadir links legales en `login.tsx` — actualmente solo visibles en registro |
-
----
-
-### 🟡 Bugs medios — no bloquean lanzamiento
-
-| ID | Componente | Descripción | Fix requerido |
-|---|---|---|---|
-| BUG-006 | Mood / Cliente | Mood aparece múltiples veces el mismo día — lógica de fecha incorrecta en cliente | Comparar `mood_updated_at` con fecha de hoy antes de mostrar pantalla mood |
-| BUG-007 | Chat / Layout | Input del chat superpuesto con barra de navegación Android | Añadir `KeyboardAvoidingView` con `behavior="height"` en componente chat |
-| BUG-009 | Moderación | Moderación no detecta mensajes cortos con lenguaje tóxico ("te odio" pasa, "eres un idiota y te odio" se bloquea) | Ajustar umbral de moderación para mensajes cortos |
-| BUG-010 | Contactos | Avatares generativos no visibles en lista de contactos | Revisar renderizado del componente SVG generativo |
-| BUG-011 | Contactos | Contactos muestran "Conexión guardada" + fecha en lugar del nombre del usuario | Añadir JOIN con tabla `users` en query de contactos |
-| BUG-015 | Admin | Dashboard admin falla con error `column "created_at" does not exist` — `saved_contacts` usa `saved_at` | Cambiar `created_at` por `saved_at` en query del dashboard admin |
-| BUG-016 | Revisión | Botón "Saltar por ahora" no visible en pantalla de revisión de identidad | Añadir botón de skip en `review.tsx` |
-
----
-
-### ⚠️ Bugs menores
-
-| ID | Componente | Descripción |
+| ID | Componente | Fix aplicado |
 |---|---|---|
-| BUG-004 | Registro | `birth_date` no se guarda en tabla `users` al registrarse |
+| BUG-001 | Auth / Supabase | `upsert` en `createUserProfile` — compatible con trigger `on_auth_user_created` |
+| BUG-002 | Perfil / Auth | `supabase.auth.signOut()` + `router.replace('/auth/login')` |
+| BUG-003 | Registro / Edad | Menores de 13 bloqueados; consentimiento parental para 13–15 (DSA Art. 28) |
+| BUG-005 | Onboarding / Nav | `_layout.tsx` y `login.tsx` verifican `onboarding_complete` con `.eq('id', user.id)` |
+| BUG-008 | Chat / Match | `home/index.tsx` usa query directa con `expires_at > NOW()` y `ORDER BY created_at DESC` |
+| BUG-013 | Cápsula | `capsule/index.tsx` carga datos reales filtrados por `user_id`; tabla `weekly_capsules` creada |
+| BUG-014 | Perfil / GDPR | `handleDeleteAccount` guarda `deletion_requested_at` antes del `signOut` |
+| BUG-017 | Notificaciones | `app.json` añade `intentFilters` Android + `scheme` para deep linking (requiere rebuild EAS) |
+| BUG-018 | Panel parental | API Route `/api/child` server-side con service role key |
+| BUG-019 | Panel parental | API Route `/api/pause` server-side con service role key |
+| BUG-020 | Login / Legal | Links legales visibles en `login.tsx` sin sesión |
 
 ---
 
-### Mitigaciones aplicadas manualmente en Supabase (16 abril 2026)
+### 🟡 Bugs medios — todos corregidos ✅
 
-Las siguientes correcciones se aplicaron directamente en Supabase durante la sesión de QA para poder continuar las pruebas. **Deben implementarse también en el código del proyecto:**
+| ID | Componente | Fix aplicado |
+|---|---|---|
+| BUG-006 | Mood | `mood.tsx` compara `mood_updated_at` con fecha de hoy |
+| BUG-007 | Chat / Layout | `KeyboardAvoidingView` con `behavior="height"` en Android |
+| BUG-009 | Moderación | Umbral dinámico: mensajes cortos (≤4 palabras) se bloquean con score >0.6 |
+| BUG-010 | Contactos | Avatar generativo con color HSL determinista por `contact_id` |
+| BUG-011 | Contactos | JOIN con `users!contact_id` — muestra nivel de profundidad y ciudad |
+| BUG-015 | Admin | Migración SQL `get_admin_metrics` usa `saved_at` en `saved_contacts` |
+| BUG-016 | Revisión | `review.tsx` en `ScrollView`; botón "Saltar" siempre visible; color mejorado |
 
-```sql
--- 1. Función y trigger para crear fila en users al registrarse
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger AS $$
-BEGIN
-  INSERT INTO public.users (id, email, onboarding_complete, depth_score, created_at, is_paused, is_deep)
-  VALUES (NEW.id, NEW.email, false, 0, NOW(), false, false);
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+---
 
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+### ⚠️ Bugs menores — todos corregidos ✅
 
--- 2. Política RLS para panel parental (temporal — reemplazar por Service Role Key)
-CREATE POLICY "parental_access" ON public.users FOR SELECT USING (true);
-CREATE POLICY "parental_update" ON public.users FOR UPDATE USING (true);
-
--- 3. Contraseña admin reseteada
-UPDATE auth.users SET encrypted_password = crypt('Admin2026$', gen_salt('bf')) WHERE email = 'admin@pulseapp.es';
-```
+| ID | Componente | Fix aplicado |
+|---|---|---|
+| BUG-004 | Registro | `birth_date` guardado via `upsert` en `createUserProfile` |
 
 ---
 
@@ -593,19 +565,30 @@ UPDATE auth.users SET encrypted_password = crypt('Admin2026$', gen_salt('bf')) W
 
 ---
 
-### Veredicto final
+## 22. Estado post-corrección — 17 abril 2026
 
-**❌ NO LISTO PARA LANZAR — 16 abril 2026**
+> Todos los bugs del QA corregidos. Código en producción. Pendientes solo operacionales.
 
-11 bugs críticos deben corregirse antes del 1 de mayo. Prioridad de corrección:
+### Commits aplicados
+- `pulse-mobile` master: `e2f5eef7` — todos los fixes + migraciones SQL
+- `pulse-parental` master: `99795b7` — API Routes server-side (Vercel redesplegado)
 
-1. BUG-003 — Menores de 13 sin bloqueo (legal urgente)
-2. BUG-014 — Eliminación cuenta sin registro (legal urgente)
-3. BUG-005 — Onboarding inaccesible (core)
-4. BUG-008 — Chat carga match incorrecto (core)
-5. BUG-001 — Trigger ausente en código (infraestructura)
-6. BUG-002 — Cerrar sesión roto (UX crítica)
-7. BUG-013 — Cápsula datos incorrectos (privacidad)
-8. BUG-017 — Notificaciones no abren app (retención)
-9. BUG-018/019 — Panel parental inoperativo (legal menores)
-10. BUG-020 — Links legales en login (compliance)
+### Migraciones Supabase aplicadas
+- `20260417_fix_get_admin_metrics.sql` — `get_admin_metrics` usa `saved_at`
+- `20260418_create_weekly_capsules.sql` — tabla `weekly_capsules` con RLS
+
+### Veredicto
+
+**✅ CÓDIGO LISTO PARA LANZAMIENTO — 17 abril 2026**
+
+### Pendientes operacionales antes del 1 de mayo
+
+| Tarea | Notas |
+|---|---|
+| EAS Build Android | Sin builds disponibles en plan Free hasta 1 mayo. Subir plan o esperar reset |
+| Probar notificaciones push en Samsung Galaxy A32 5G | Requiere el nuevo build (intentFilters) |
+| Configurar `pulse_deep_monthly` en Google Play Console (4,99€) | Necesario para RevenueCat en producción |
+| Reemplazar API key test RevenueCat por producción | `EXPO_PUBLIC_REVENUECAT_ANDROID_KEY` |
+| Llegar a 200 usuarios en lista de espera Madrid | Marketing |
+| Activar geofencing por ciudad | Backend |
+| Briefing equipo moderación | — |

@@ -118,7 +118,12 @@ export default function MoodScreen() {
     }, 600);
   };
 
-  const skip = () => {
+  // Guardar mood 'rest' al saltar para que home no redirija de vuelta a mood
+  const skip = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.rpc('set_daily_mood', { p_user_id: user.id, p_mood: 'rest' });
+    }
     router.replace('/home');
   };
 
