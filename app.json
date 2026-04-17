@@ -8,8 +8,36 @@
     "owner": "pulse-app73",
     "name": "pulse-mobile",
     "slug": "pulse-mobile",
+    "scheme": "pulsemobile",
     "android": {
-      "package": "com.pulseapp73.pulsemobile"
+      "package": "com.pulseapp73.pulsemobile",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "pulseapp.es",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "pulsemobile"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
+    "notification": {
+      "color": "#7F77DD",
+      "androidMode": "default"
     }
   }
 }
