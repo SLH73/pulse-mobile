@@ -129,7 +129,7 @@ export default function CapsuleScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
-      <Text style={styles.title}>Capsula</Text>
+      <Text style={styles.title}>Cápsula</Text>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.weekScroll}>
         {capsules.map((c, i) => (
