@@ -1,5 +1,8 @@
 -- FIX BUG-015: saved_contacts usa saved_at, no created_at
 -- La función get_admin_metrics fallaba con "column created_at does not exist"
+-- DROP necesario porque CREATE OR REPLACE no puede cambiar el return type
+
+DROP FUNCTION IF EXISTS public.get_admin_metrics();
 
 CREATE OR REPLACE FUNCTION public.get_admin_metrics()
 RETURNS json
