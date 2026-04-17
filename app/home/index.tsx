@@ -153,29 +153,43 @@ export default function HomeScreen() {
         uid = user.id;
       }
 
-      const { data, error } = await supabase
-        .rpc('get_today_match', { p_user_id: uid });
+      // FIX BUG-008: query directa con ORDER BY created_at DESC y filtro expires_at > NOW()
+      // garantiza que ambos usuarios del match obtengan el mismo match_id
+      const now = new Date().toISOString();
+      const { data: matchRow, error } = await supabase
+        .from('daily_matches')
+        .select('id, user_a, user_b, expires_at, saved_by_a, saved_by_b, mutual_save_count')
+        .or(`user_a.eq.${uid},user_b.eq.${uid}`)
+        .or(`expires_at.gt.${now},expires_at.is.null`)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       if (error) throw error;
 
-      if (data && data.length > 0) {
-        const matchData = data[0];
+      if (matchRow) {
+        const iAmA       = matchRow.user_a === uid;
+        const matchUid   = iAmA ? matchRow.user_b : matchRow.user_a;
+        const savedByMe  = iAmA ? matchRow.saved_by_a : matchRow.saved_by_b;
 
         const { data: profile } = await supabase
           .from('users')
           .select('depth_score, city, created_at')
-          .eq('id', matchData.match_user_id)
+          .eq('id', matchUid)
           .single();
 
         setMatch({
-          ...matchData,
+          match_id:      matchRow.id,
+          match_user_id: matchUid,
+          expires_at:    matchRow.expires_at,
+          saved_by_me:   savedByMe,
           match_profile: profile ?? {
             depth_score: 0,
-            city: null,
-            created_at: new Date().toISOString(),
+            city:        null,
+            created_at:  new Date().toISOString(),
           },
         });
-        setHoursLeft(hoursUntil(matchData.expires_at));
+        setHoursLeft(hoursUntil(matchRow.expires_at));
       }
     } catch (e: any) {
       setError('Error cargando el match: ' + e.message);

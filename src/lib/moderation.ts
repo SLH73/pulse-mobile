@@ -86,17 +86,24 @@ export async function moderateMessage(text: string): Promise<ModerationResult> {
 
     const maxScore = Math.max(toxicity, threat, sexually_explicit);
 
+    // FIX BUG-009: umbral más bajo para mensajes cortos (<= 4 palabras o <= 20 chars)
+    // "te odio" pasa con 0.8 pero debe bloquearse con umbral 0.6
+    const wordCount = text.trim().split(/\s+/).length;
+    const isShort   = text.trim().length <= 20 || wordCount <= 4;
+    const blockAt   = isShort ? 0.6 : 0.8;
+    const flagAt    = isShort ? 0.75 : 0.9;
+
     // Determinar categoría que disparó el bloqueo
     let reason: string | undefined;
-    if (maxScore > 0.8) {
+    if (maxScore > blockAt) {
       if (sexually_explicit === maxScore) reason = 'contenido sexual';
       else if (threat === maxScore)       reason = 'amenaza';
       else                                reason = 'lenguaje toxico';
     }
 
     return {
-      approved: maxScore <= 0.8,
-      flag:     maxScore > 0.9,
+      approved: maxScore <= blockAt,
+      flag:     maxScore > flagAt,
       scores:   { toxicity, threat, sexually_explicit },
       reason,
     };

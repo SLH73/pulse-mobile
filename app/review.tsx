@@ -4,6 +4,7 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -133,6 +134,11 @@ export default function IdentityReviewScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
       <Animated.View
         style={[
           styles.inner,
@@ -206,6 +212,7 @@ export default function IdentityReviewScreen() {
         )}
 
       </Animated.View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -216,9 +223,11 @@ export default function IdentityReviewScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0D0D0D' },
+  scroll:    { flexGrow: 1, justifyContent: 'center' },
   inner: {
-    flex: 1, padding: 24,
-    justifyContent: 'center', gap: 0,
+    padding: 24,
+    paddingBottom: 40,
+    gap: 0,
   },
 
   // Cabecera
@@ -255,5 +264,5 @@ const styles = StyleSheet.create({
   },
   btnText:  { fontSize: 16, fontWeight: '500', color: '#0D0D0D' },
   skipBtn:  { alignItems: 'center', paddingVertical: 12 },
-  skipText: { fontSize: 14, color: '#444441' },
+  skipText: { fontSize: 14, color: '#5F5E5A' },
 });

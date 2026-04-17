@@ -55,11 +55,11 @@ export default function LoginScreen() {
     return { valid: true };
   };
 
-  // ✅ FIX BUG-003: Solo muestra consentimiento parental para 13 y 14, NO para <13
+  // ✅ FIX BUG-003: Consentimiento parental para 13-15 (DSA Art. 28 — <16), NO para <13
   const needsParentalConsent = (): boolean => {
     if (birthYear.length !== 4) return false;
     const age = getAge();
-    return age === 13 || age === 14;
+    return age >= 13 && age <= 15;
   };
 
   // ✅ FIX BUG-001: Crea la fila en users tras el signup
@@ -70,7 +70,7 @@ export default function LoginScreen() {
 
     const { error } = await supabase
       .from('users')
-      .insert({
+      .upsert({
         id: userId,
         email,
         onboarding_complete: false,
@@ -80,7 +80,7 @@ export default function LoginScreen() {
         birth_date: birthDate, // ✅ FIX BUG-004: Guarda birth_date
         parental_email: needsParentalConsent() && parentEmail ? parentEmail : null,
         created_at: new Date().toISOString(),
-      });
+      }, { onConflict: 'id', ignoreDuplicates: false });
 
     if (error) console.error('Error creando perfil de usuario:', error);
   };
@@ -111,7 +111,7 @@ export default function LoginScreen() {
         return;
       }
       if (needsParentalConsent() && !parentEmail) {
-        setError('Al tener 13 o 14 años necesitas el email de un padre o tutor.');
+        setError('Al tener menos de 16 años necesitas el email de un padre o tutor.');
         return;
       }
     }
@@ -139,6 +139,7 @@ export default function LoginScreen() {
         const { data: userData } = await supabase
           .from('users')
           .select('onboarding_complete')
+          .eq('id', data.user.id)
           .single();
 
         if (!userData?.onboarding_complete) {
@@ -185,12 +186,12 @@ export default function LoginScreen() {
               maxLength={4}
             />
 
-            {/* ✅ FIX BUG-003: Solo muestra consentimiento para 13-14, nunca para <13 */}
+            {/* ✅ FIX BUG-003: Solo muestra consentimiento para 13-15 (DSA <16), nunca para <13 */}
             {needsParentalConsent() && (
               <View style={styles.parentalBox}>
                 <Text style={styles.parentalTitle}>Consentimiento parental requerido</Text>
                 <Text style={styles.parentalText}>
-                  Al tener 13 o 14 años, necesitamos el email de tu padre, madre o tutor legal.
+                  Al tener menos de 16 años, necesitamos el email de tu padre, madre o tutor legal.
                 </Text>
                 <TextInput
                   style={styles.input}
