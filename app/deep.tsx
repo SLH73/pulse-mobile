@@ -23,26 +23,26 @@ import {
 const BENEFITS = [
   {
     icon: '⚡',
-    title: 'Hasta 3 conexiones al dia',
-    subtitle: 'No te pierdas ninguna conexion importante',
+    title: 'Hasta 3 conexiones al día',
+    subtitle: 'No te pierdas ninguna conexión importante',
     color: '#7F77DD',
   },
   {
     icon: '🔍',
-    title: 'Por que sois compatibles',
-    subtitle: 'Explicacion de tu afinidad con cada Pulse',
+    title: 'Por qué sois compatibles',
+    subtitle: 'Explicación de tu afinidad con cada Pulse',
     color: '#1D9E75',
   },
   {
     icon: '📅',
-    title: 'Historial ilimitado de capsulas',
-    subtitle: 'Accede a todas tus semanas, no solo las ultimas 4',
+    title: 'Historial ilimitado de cápsulas',
+    subtitle: 'Accede a todas tus semanas, no solo las últimas 4',
     color: '#7F77DD',
   },
   {
     icon: '📊',
-    title: 'Estadisticas avanzadas',
-    subtitle: 'Analisis profundo de tu DepthMeter y conexiones',
+    title: 'Estadísticas avanzadas',
+    subtitle: 'Análisis profundo de tu DepthMeter y conexiones',
     color: '#1D9E75',
   },
   {
@@ -123,9 +123,9 @@ export default function DeepScreen() {
 
     if (restored) {
       setIsDeep(true);
-      Alert.alert('Compra restaurada', 'Tu suscripcion Pulse Deep ha sido restaurada.');
+      Alert.alert('Compra restaurada', 'Tu suscripción Pulse Deep ha sido restaurada.');
     } else {
-      Alert.alert('Sin compras', 'No encontramos ninguna suscripcion activa para restaurar.');
+      Alert.alert('Sin compras', 'No encontramos ninguna suscripción activa para restaurar.');
     }
   };
 
@@ -152,19 +152,19 @@ export default function DeepScreen() {
       <View style={styles.hero}>
         <Text style={styles.badge}>✦ PULSE DEEP</Text>
         <Text style={styles.title}>
-          {isDeep ? 'Eres Deep' : 'Ve mas alla'}
+          {isDeep ? 'Eres Deep' : 'Ve más allá'}
         </Text>
         <Text style={styles.subtitle}>
           {isDeep
             ? 'Tienes acceso completo a todas las funciones de Pulse Deep.'
-            : 'Conexiones mas profundas, mas contexto, mas ti.'}
+            : 'Conexiones más profundas, más contexto, más ti.'}
         </Text>
       </View>
 
       {/* PRECIO */}
       {!isDeep && (
         <View style={styles.priceCard}>
-          <Text style={styles.priceLabel}>Suscripcion mensual</Text>
+          <Text style={styles.priceLabel}>Suscripción mensual</Text>
           <Text style={styles.price}>{price}</Text>
           <Text style={styles.priceSub}>Cancela cuando quieras</Text>
         </View>
@@ -204,7 +204,7 @@ export default function DeepScreen() {
           </TouchableOpacity>
 
           <Text style={styles.legalText}>
-            La suscripcion se renueva automaticamente cada mes. Puedes cancelar en cualquier
+            La suscripción se renueva automáticamente cada mes. Puedes cancelar en cualquier
             momento desde los ajustes de tu cuenta de Google Play o App Store.
           </Text>
 

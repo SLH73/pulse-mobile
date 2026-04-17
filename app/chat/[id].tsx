@@ -45,7 +45,7 @@ interface MatchState {
 const MOCK_IDS = ['1', '2', '3'];
 
 function formatTimer(expiresAt: string | null): string {
-  if (!expiresAt) return 'Conexion permanente';
+  if (!expiresAt) return 'Conexión permanente';
   const ms = new Date(expiresAt).getTime() - Date.now();
   if (ms <= 0) return 'Expirado';
   const h = Math.floor(ms / 3_600_000);
@@ -91,8 +91,8 @@ function ShareCard({ matchId }: ShareCardProps) {
       {/* Contenido */}
       <View style={card.content}>
         <Text style={card.logo}>pulse</Text>
-        <Text style={card.mainText}>Conecte con{'\n'}alguien real</Text>
-        <Text style={card.subText}>Una conexion al dia.{'\n'}Eso es todo lo que necesitas.</Text>
+        <Text style={card.mainText}>Conecta con{'\n'}alguien real</Text>
+        <Text style={card.subText}>Una conexión al día.{'\n'}Eso es todo lo que necesitas.</Text>
         <View style={card.badge}>
           <Text style={card.badgeText}>pulseapp.es</Text>
         </View>
@@ -268,7 +268,7 @@ export default function ChatScreen() {
     if (!modResult.approved) {
       setBlockedText(
         `Mensaje bloqueado por ${modResult.reason ?? 'contenido inapropiado'}. ` +
-        'Por favor, manten un trato respetuoso.'
+        'Por favor, mantén un trato respetuoso.'
       );
 
       if (modResult.flag) {
@@ -323,7 +323,7 @@ export default function ChatScreen() {
     };
 
     if (result.status === 'already_saved') {
-      Alert.alert('Ya guardado', 'Ya habias guardado esta conexion.');
+      Alert.alert('Ya guardado', 'Ya habías guardado esta conexión.');
       return;
     }
 
@@ -332,8 +332,8 @@ export default function ChatScreen() {
       setShowShareModal(true);
     } else {
       Alert.alert(
-        'Conexion guardada',
-        'Has guardado esta conexion. Si la otra persona tambien guarda, el chat se extiende 72h mas.',
+        'Conexión guardada',
+        'Has guardado esta conexión. Si la otra persona también guarda, el chat se extiende 72h más.',
       );
     }
   };
@@ -347,7 +347,7 @@ export default function ChatScreen() {
       const uri = await viewShotRef.current.capture();
       await Share.share({
         url:     uri,
-        message: 'Conecte con alguien real en Pulse. Una conexion al dia. pulseapp.es',
+        message: 'Conecté con alguien real en Pulse. Una conexión al día. pulseapp.es',
       });
     } catch (e) {
       console.log('[share] cancelado o error', e);
@@ -380,7 +380,7 @@ export default function ChatScreen() {
     if (isPermanent) {
       return (
         <View style={[styles.banner, styles.bannerPermanent]}>
-          <Text style={styles.bannerTextPermanent}>★ Conexion permanente — esta conversacion no expira</Text>
+          <Text style={styles.bannerTextPermanent}>★ Conexión permanente — esta conversación no expira</Text>
         </View>
       );
     }
@@ -396,7 +396,7 @@ export default function ChatScreen() {
             Guardado mutuamente · Chat extendido 72h ·{' '}
             {extensionsLeft > 0
               ? `${extensionsLeft} extensiones posibles`
-              : 'Proxima extension sera permanente'}
+              : 'Próxima extensión será permanente'}
             {'  '}
             <Text style={styles.bannerShare}>Compartir →</Text>
           </Text>
@@ -408,7 +408,7 @@ export default function ChatScreen() {
       return (
         <View style={[styles.banner, styles.bannerWaiting]}>
           <Text style={styles.bannerTextWaiting}>
-            Has guardado esta conexion. Esperando que la otra persona tambien guarde...
+            Has guardado esta conexión. Esperando que la otra persona también guarde...
           </Text>
         </View>
       );
@@ -418,7 +418,7 @@ export default function ChatScreen() {
       return (
         <View style={[styles.banner, styles.bannerSave]}>
           <Text style={styles.bannerTextSave}>
-            Esta conexion vale la pena? Guardala antes de que expire.
+            ¿Esta conexión vale la pena? Guárdala antes de que expire.
           </Text>
         </View>
       );
@@ -428,7 +428,7 @@ export default function ChatScreen() {
       return (
         <View style={[styles.banner, styles.bannerInfo]}>
           <Text style={styles.bannerTextInfo}>
-            Envia {3 - messageCount} mensaje{3 - messageCount === 1 ? '' : 's'} mas para poder guardar esta conexion.
+            Envía {3 - messageCount} mensaje{3 - messageCount === 1 ? '' : 's'} más para poder guardar esta conexión.
           </Text>
         </View>
       );
@@ -534,7 +534,7 @@ export default function ChatScreen() {
         <View style={modal.overlay}>
           <View style={modal.container}>
 
-            <Text style={modal.title}>¡Conexion real!</Text>
+            <Text style={modal.title}>¡Conexión real!</Text>
             <Text style={modal.subtitle}>
               Los dos habeis querido seguir. Comparte este momento.
             </Text>

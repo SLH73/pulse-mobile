@@ -217,7 +217,7 @@ export default function HomeScreen() {
 
       {/* CABECERA */}
       <View style={styles.header}>
-        <Text style={styles.greeting}>Tu conexion de hoy</Text>
+        <Text style={styles.greeting}>Tu conexión de hoy</Text>
         <Text style={styles.title}>Pulse</Text>
 
         {mood && (
@@ -233,7 +233,7 @@ export default function HomeScreen() {
       {/* MATCH CARD */}
       {match ? (
         <View style={styles.matchCard}>
-          <Text style={styles.matchLabel}>Alguien te esta esperando</Text>
+          <Text style={styles.matchLabel}>Alguien te está esperando</Text>
 
           <View style={styles.statsRow}>
             <View style={styles.stat}>
@@ -270,7 +270,7 @@ export default function HomeScreen() {
             style={styles.startBtn}
             onPress={() => router.push(`/chat/${match.match_id}`)}
           >
-            <Text style={styles.startBtnText}>Empezar conversacion</Text>
+            <Text style={styles.startBtnText}>Empezar conversación</Text>
           </TouchableOpacity>
         </View>
 
@@ -278,11 +278,11 @@ export default function HomeScreen() {
         <View style={styles.noMatchCard}>
           <Text style={styles.noMatchTitle}>Tu Pulse llega a las 18:00</Text>
           <Text style={styles.noMatchSubtitle}>
-            Cada dia conectamos a las personas en el momento{'\n'}
-            en que mas lo necesitan. Vuelve esta tarde.
+            Cada día conectamos a las personas en el momento{'\n'}
+            en que más lo necesitan. Vuelve esta tarde.
           </Text>
           <TouchableOpacity style={styles.retryBtn} onPress={() => loadMatch()}>
-            <Text style={styles.retryText}>Buscar conexion</Text>
+            <Text style={styles.retryText}>Buscar conexión</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -293,7 +293,7 @@ export default function HomeScreen() {
           <Text style={styles.footerLink}>Contactos</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => router.push('/capsule')}>
-          <Text style={styles.footerLink}>Capsula</Text>
+          <Text style={styles.footerLink}>Cápsula</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => router.push('/profile')}>
           <Text style={styles.footerLink}>Perfil</Text>

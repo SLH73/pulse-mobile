@@ -44,7 +44,7 @@ export default function PrivacyScreen() {
       </Section>
 
       <Section title="5. Menores de edad">
-        Pulse esta diseñada exclusivamente para usuarios de 13 a 19 años. Los usuarios menores de 14 años necesitan el consentimiento verificable de sus padres o tutores legales, conforme a la LOPD española.{'\n\n'}
+        Pulse está diseñada exclusivamente para usuarios de 13 a 19 años. Los usuarios menores de 14 años necesitan el consentimiento verificable de sus padres o tutores legales, conforme a la LOPD española.{'\n\n'}
         Si eres padre o tutor y crees que tu hijo ha creado una cuenta sin tu consentimiento, contacta con nosotros en privacidad@pulseapp.es para eliminar la cuenta inmediatamente.
       </Section>
 
@@ -85,7 +85,7 @@ export default function PrivacyScreen() {
       <Section title="11. Contacto">
         Para cualquier consulta sobre privacidad:{'\n\n'}
         Email: privacidad@pulseapp.es{'\n'}
-        Dirección: Madrid, Espana{'\n\n'}
+        Dirección: Madrid, España{'\n\n'}
         También puedes presentar una reclamación ante la Agencia Española de Protección de Datos (AEPD) en www.aepd.es
       </Section>
 
