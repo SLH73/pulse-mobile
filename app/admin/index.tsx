@@ -133,7 +133,7 @@ export default function AdminDashboard() {
     return (
       <View style={styles.center}>
         <ActivityIndicator color="#7F77DD" />
-        <Text style={styles.loadingText}>Cargando metricas...</Text>
+        <Text style={styles.loadingText}>Cargando métricas...</Text>
       </View>
     );
   }
@@ -160,8 +160,8 @@ export default function AdminDashboard() {
           <Text style={styles.back}>← Volver</Text>
         </TouchableOpacity>
         <View>
-          <Text style={styles.eyebrow}>Panel de administracion</Text>
-          <Text style={styles.title}>Metricas Pulse</Text>
+          <Text style={styles.eyebrow}>Panel de administración</Text>
+          <Text style={styles.title}>Métricas Pulse</Text>
           {metrics && (
             <Text style={styles.updatedAt}>
               Actualizado a las {formatTime(metrics.generated_at)} · Desliza para refrescar
@@ -191,7 +191,7 @@ export default function AdminDashboard() {
           </View>
 
           {/* SECCIÓN: CONVERSIÓN */}
-          <Text style={styles.sectionTitle}>Conversion</Text>
+          <Text style={styles.sectionTitle}>Conversión</Text>
           <View style={styles.grid}>
             <MetricCard
               label="Matches que abren chat"
@@ -226,10 +226,10 @@ export default function AdminDashboard() {
           </View>
 
           {/* SECCIÓN: MODERACIÓN */}
-          <Text style={styles.sectionTitle}>Moderacion</Text>
+          <Text style={styles.sectionTitle}>Moderación</Text>
           <View style={styles.grid}>
             <MetricCard
-              label="Flags pendientes de revision"
+              label="Flags pendientes de revisión"
               value={metrics.flags_pending}
               sublabel={metrics.flags_pending > 3 ? '⚠ Revisar urgente' : 'Sin alertas'}
               alert={metrics.flags_pending > 3}
@@ -244,7 +244,7 @@ export default function AdminDashboard() {
             disabled={refreshing}
           >
             <Text style={styles.refreshBtnText}>
-              {refreshing ? 'Actualizando...' : 'Actualizar metricas'}
+              {refreshing ? 'Actualizando...' : 'Actualizar métricas'}
             </Text>
           </TouchableOpacity>
         </>

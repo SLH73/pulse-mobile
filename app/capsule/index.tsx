@@ -85,10 +85,11 @@ export default function CapsuleScreen() {
         .order('week_start', { ascending: false })
         .limit(4);
 
-      if (error) throw error;
+      // PGRST205: tabla aún no existe — mostrar estado vacío sin error
+      if (error && error.code !== 'PGRST205') throw error;
       setCapsules(data ?? []);
     } catch (e) {
-      console.error('Error cargando capsulas:', e);
+      console.error('Error cargando cápsulas:', e);
     } finally {
       setLoading(false);
     }
@@ -111,11 +112,11 @@ export default function CapsuleScreen() {
   if (capsules.length === 0) {
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>Capsula</Text>
+        <Text style={styles.title}>Cápsula</Text>
         <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>Aun no hay capsulas</Text>
+          <Text style={styles.emptyTitle}>Aún no hay cápsulas</Text>
           <Text style={styles.emptySubtitle}>
-            Cada semana generamos una capsula con el resumen de tus conexiones.
+            Cada semana generamos una cápsula con el resumen de tus conexiones.
             Vuelve el lunes.
           </Text>
         </View>
@@ -162,7 +163,7 @@ export default function CapsuleScreen() {
           </View>
         </View>
         <TouchableOpacity style={styles.shareBtn} onPress={() => handleShare(capsule)}>
-          <Text style={styles.shareBtnText}>Compartir capsula</Text>
+          <Text style={styles.shareBtnText}>Compartir cápsula</Text>
         </TouchableOpacity>
       </View>
 

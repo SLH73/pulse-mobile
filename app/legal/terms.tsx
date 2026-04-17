@@ -18,7 +18,7 @@ export default function TermsScreen() {
       </Section>
 
       <Section title="2. Edad mínima">
-        Pulse esta destinada exclusivamente a personas de entre 13 y 19 años. Al registrarte declaras tener esa edad. Los menores de 14 años necesitan consentimiento parental.
+        Pulse está destinada exclusivamente a personas de entre 13 y 19 años. Al registrarte declaras tener esa edad. Los menores de 14 años necesitan consentimiento parental.
       </Section>
 
       <Section title="3. Uso aceptable">
@@ -29,7 +29,7 @@ export default function TermsScreen() {
         Las conversaciones desaparecen automáticamente a las 72 horas si no se guarda el contacto. Esto es una característica del servicio.
       </Section>
 
-      <Section title="5. Moderacion">
+      <Section title="5. Moderación">
         Pulse puede suspender o eliminar cuentas que violen estos términos sin previo aviso.
       </Section>
 

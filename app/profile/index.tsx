@@ -201,7 +201,7 @@ export default function ProfileScreen() {
         <TouchableOpacity style={styles.deepCtaCard} onPress={() => router.push('/deep')}>
           <View style={styles.deepCtaLeft}>
             <Text style={styles.deepCtaTitle}>✦ Pulse Deep</Text>
-            <Text style={styles.deepCtaSubtitle}>3 conexiones al dia · Explicacion de compatibilidad</Text>
+            <Text style={styles.deepCtaSubtitle}>3 conexiones al día · Explicación de compatibilidad</Text>
           </View>
           <Text style={styles.deepCtaPrice}>4,99€/mes</Text>
         </TouchableOpacity>
@@ -214,12 +214,12 @@ export default function ProfileScreen() {
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.actionRow} onPress={() => router.push('/capsule')}>
-        <Text style={styles.actionText}>Mi capsula semanal</Text>
+        <Text style={styles.actionText}>Mi cápsula semanal</Text>
         <Text style={styles.actionArrow}>›</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.actionRow} onPress={() => router.push('/legal/privacy')}>
-        <Text style={styles.actionText}>Politica de privacidad</Text>
+        <Text style={styles.actionText}>Política de privacidad</Text>
         <Text style={styles.actionArrow}>›</Text>
       </TouchableOpacity>
 
@@ -229,13 +229,13 @@ export default function ProfileScreen() {
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.actionRow} onPress={handleSignOut}>
-        <Text style={[styles.actionText, { color: '#E24B4A' }]}>Cerrar sesion</Text>
+        <Text style={[styles.actionText, { color: '#E24B4A' }]}>Cerrar sesión</Text>
         <Text style={styles.actionArrow}>›</Text>
       </TouchableOpacity>
 
       {isAdmin && (
         <TouchableOpacity style={styles.adminRow} onPress={() => router.push('/admin')}>
-          <Text style={styles.adminText}>Panel de administracion</Text>
+          <Text style={styles.adminText}>Panel de administración</Text>
           <Text style={styles.actionArrow}>›</Text>
         </TouchableOpacity>
       )}

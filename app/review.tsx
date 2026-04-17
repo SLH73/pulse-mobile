@@ -19,8 +19,8 @@ import { supabase } from '../src/lib/supabase';
 // ────────────────────────────────────────────────────────────
 
 const REVIEW_QUESTIONS = [
-  "¿Que te preocupa ahora mismo que hace 3 meses no te preocupaba?",
-  "¿En que has cambiado estos ultimos meses sin que nadie te lo haya dicho?",
+  "¿Qué te preocupa ahora mismo que hace 3 meses no te preocupaba?",
+  "¿En qué has cambiado estos últimos meses sin que nadie te lo haya dicho?",
 ];
 
 // ────────────────────────────────────────────────────────────
@@ -147,7 +147,7 @@ export default function IdentityReviewScreen() {
       >
         {/* CABECERA */}
         <View style={styles.header}>
-          <Text style={styles.eyebrow}>Revision de identidad</Text>
+          <Text style={styles.eyebrow}>Revisión de identidad</Text>
           <View style={styles.progressRow}>
             {REVIEW_QUESTIONS.map((_, i) => (
               <View
@@ -180,7 +180,7 @@ export default function IdentityReviewScreen() {
           style={styles.input}
           value={draft}
           onChangeText={setDraft}
-          placeholder="Escribe aqui..."
+          placeholder="Escribe aquí..."
           placeholderTextColor="#444441"
           multiline
           maxLength={300}

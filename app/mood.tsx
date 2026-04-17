@@ -41,7 +41,7 @@ const OPTIONS: MoodOption[] = [
     key:      'rest',
     icon:     '🌙',
     label:    'Solo estar',
-    sublabel: 'Sin presion, lo que salga',
+    sublabel: 'Sin presión, lo que salga',
     color:    '#8F8E8A',
     bg:       '#1A1A18',
   },
@@ -142,9 +142,9 @@ export default function MoodScreen() {
       >
         <View style={styles.header}>
           <Text style={styles.eyebrow}>Antes de tu Pulse de hoy</Text>
-          <Text style={styles.title}>Como estas hoy?</Text>
+          <Text style={styles.title}>¿Cómo estás hoy?</Text>
           <Text style={styles.subtitle}>
-            Te conectaremos con alguien que complementa tu energia del momento.
+            Te conectaremos con alguien que complementa tu energía del momento.
           </Text>
         </View>
 

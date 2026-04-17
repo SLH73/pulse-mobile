@@ -88,13 +88,13 @@ export default function ContactsScreen() {
 
       {contacts.length === 0 ? (
         <View style={s.empty}>
-          <Text style={s.emptyTitle}>Aun no hay nadie aqui</Text>
+          <Text style={s.emptyTitle}>Aún no hay nadie aquí</Text>
           <Text style={s.emptyText}>Pulsa Guardar en el chat para añadir conexiones.</Text>
         </View>
       ) : (
         contacts.map(c => {
           const profile  = c.contact_profile;
-          const label    = profile ? depthLabel(profile.depth_score) : 'Conexion';
+          const label    = profile ? depthLabel(profile.depth_score) : 'Conexión';
           const sublabel = profile?.city ? profile.city : new Date(c.saved_at).toLocaleDateString('es');
           return (
             <TouchableOpacity key={c.id} style={s.row} onPress={() => router.push(`/chat/${c.match_id}`)}>
