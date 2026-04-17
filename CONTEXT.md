@@ -584,6 +584,7 @@ El modelo tiene contexto completo del producto, arquitectura, stack, código y e
 | `weekly_capsules` no existía (PGRST205) | Migración `20260418_create_weekly_capsules.sql` + error silenciado en capsule screen |
 | Mood "Saltar por hoy" bucle infinito con home | `skip()` llama a `set_daily_mood(rest)` antes de navegar |
 | Botones Android tapan "Cerrar sesión" en perfil | `useSafeAreaInsets().bottom` en `paddingBottom` del ScrollView |
+| Botones Android tapan input del chat | `useSafeAreaInsets().bottom` en `paddingBottom` del `inputRow` |
 
 ### Veredicto
 
