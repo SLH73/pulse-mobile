@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { supabase } from '../../src/lib/supabase';
 import { getIsDeep } from '../../src/lib/revenuecat';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const ADMIN_EMAIL = 'admin@pulseapp.es';
 
@@ -25,7 +26,8 @@ interface UserProfile {
 }
 
 export default function ProfileScreen() {
-  const router = useRouter();
+  const router   = useRouter();
+  const insets   = useSafeAreaInsets();
 
   const [isAdmin, setIsAdmin]   = useState(false);
   const [isDeep, setIsDeep]     = useState(false);
@@ -139,7 +141,7 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
+      <ScrollView style={styles.container} contentContainerStyle={[styles.scroll, { paddingBottom: 48 + insets.bottom }]}>
         <Text style={styles.title}>Perfil</Text>
         <Text style={{ color: '#5F5E5A', textAlign: 'center', marginTop: 40 }}>Cargando...</Text>
       </ScrollView>
@@ -147,7 +149,7 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.scroll, { paddingBottom: 48 + insets.bottom }]}>
       <Text style={styles.title}>Perfil</Text>
 
       {/* HERO */}
