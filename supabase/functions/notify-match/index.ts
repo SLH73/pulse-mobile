@@ -11,8 +11,8 @@ serve(async (req) => {
   try {
     const { user_id, match_user_id } = await req.json();
 
-    if (!user_id) {
-      return new Response(JSON.stringify({ error: 'user_id requerido' }), {
+    if (!user_id || !match_user_id) {
+      return new Response(JSON.stringify({ error: 'user_id y match_user_id requeridos' }), {
         status: 400, headers: { 'Content-Type': 'application/json' },
       });
     }
@@ -46,7 +46,7 @@ serve(async (req) => {
       to:    token,
       sound: 'default',
       title: 'Tu Pulse de hoy',
-      body:  'Alguien te esta esperando. Tienes 72h para conectar.',
+      body:  'Alguien te está esperando. Tienes 72h para conectar.',
       data:  { type: 'new_match', match_user_id },
       channelId: 'pulse',
     };

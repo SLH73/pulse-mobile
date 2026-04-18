@@ -72,6 +72,7 @@ C:\Users\slope\
 │   │   │   ├── supabase.ts
 │   │   │   ├── moderation.ts       # Moderación con Claude API
 │   │   │   ├── notifications.ts    # Registro de token push
+│   │   │   ├── location.ts         # Detección automática de ciudad (expo-location)
 │   │   │   └── revenuecat.ts       # Wrapper RevenueCat
 │   │   └── ...
 │   └── supabase\
@@ -317,6 +318,8 @@ EXPO_PUBLIC_PROJECT_ID=0eeaa082-4aeb-47df-9699-f30d621983fb
 SERVICE_KEY=...
 SUPABASE_URL=https://ynjszpegtmtemckwgovr.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=...
+VOYAGE_API_KEY=...
+MAX_CANDIDATES=500
 ```
 
 ### pulse-parental (.env.local)
@@ -370,18 +373,21 @@ Dispositivo de prueba:    Samsung Galaxy A32 5G
 ### Completado — Backend e infraestructura
 - [x] Supabase con todas las tablas y RLS
 - [x] 10+ funciones SQL implementadas
-- [x] Edge Functions: notify-match + onboarding + match + messages + contacts + invites
+- [x] Edge Functions: notify-match + embed-answers
 - [x] Matching engine en Railway con boost de mood
+- [x] Embeddings semánticos reales con Voyage AI (voyage-3-lite, 512 dims)
+- [x] pgvector habilitado en Supabase; identity_vectors usa vector(512)
 - [x] Panel parental en Vercel
 - [x] Landing page con lista de espera
 - [x] RevenueCat configurado (entitlement pulse_deep)
+- [x] Geofencing por ciudad (expo-location, reverse geocoding, fallback global)
+- [x] Errores de login traducidos al español
 
 ### Pendiente antes del 1 de mayo
 - [ ] Notificaciones push: probar en Samsung Galaxy A32 5G
 - [ ] Llegar a 200 usuarios en lista de espera Madrid
 - [ ] Configurar producto en Google Play Console para Pulse Deep
 - [ ] Reemplazar API key test de RevenueCat por producción
-- [ ] Activación del geofencing por ciudad
 - [ ] Briefing al equipo de moderación
 
 ---
@@ -576,6 +582,9 @@ El modelo tiene contexto completo del producto, arquitectura, stack, código y e
 ### Migraciones Supabase aplicadas
 - `20260417_fix_get_admin_metrics.sql` — `get_admin_metrics` usa `saved_at`
 - `20260418_create_weekly_capsules.sql` — tabla `weekly_capsules` con RLS
+- `20260419_waitlist_rls.sql` — RLS en waitlist + función `get_waitlist_count()`
+- `20260420_messages_edited_at.sql` — columna `edited_at timestamptz` en `messages`
+- `20260420_identity_vectors_dim_1024.sql` — pgvector habilitado; `vector` migrado a vector(512) (voyage-3-lite)
 
 ### Bugs adicionales corregidos post-QA (17 abril 2026)
 
@@ -601,3 +610,167 @@ El modelo tiene contexto completo del producto, arquitectura, stack, código y e
 | Llegar a 200 usuarios en lista de espera Madrid | Marketing |
 | Activar geofencing por ciudad | Backend |
 | Briefing equipo moderación | — |
+
+---
+
+## 24. Estado post-sesión — 18 abril 2026
+
+### Nuevas funcionalidades implementadas
+
+| Funcionalidad | Fichero | Estado |
+|---|---|---|
+| Borrado de mensajes (LongPress, ventana 10 min) | `app/chat/[id].tsx` | ✅ |
+| Edición de mensajes (banner amarillo, ventana 10 min) | `app/chat/[id].tsx` | ✅ |
+| Realtime UPDATE/DELETE en mensajes | `app/chat/[id].tsx` | ✅ |
+| Edge Function `embed-answers` | `supabase/functions/embed-answers/index.ts` | ✅ |
+| Onboarding guarda respuestas y genera vector | `app/onboarding/step4.tsx` | ✅ |
+| Embeddings semánticos Voyage AI (voyage-3-lite) | `pulse-matching-engine/main.py` | ✅ |
+| Fallback local si Voyage falla | `pulse-matching-engine/main.py` | ✅ |
+| SUPABASE_SERVICE_ROLE_KEY rotada | Railway + .env local | ✅ |
+| Geofencing: matching solo usuarios misma ciudad | `pulse-matching-engine/main.py` | ✅ |
+| Detección automática de ciudad (expo-location) | `src/lib/location.ts` | ✅ |
+| Ciudad detectada en onboarding final y en login | `step4.tsx` + `login.tsx` | ✅ |
+| Errores de auth traducidos al español | `app/auth/login.tsx` | ✅ |
+| Fix scope bug: `data.user.id` en rama login | `app/auth/login.tsx` | ✅ |
+
+### Commits — pulse-matching-engine
+- `6da55e0` — Voyage AI embeddings semánticos (voyage-3-lite, 512 dims)
+- `b32c05d` — fix: upsert con `?on_conflict=user_id` (PostgREST v10)
+- `018a7d0` — fix: voyage-3-lite devuelve 512 dims, no 1024; fallback alineado
+- `443e539` — fix: parsear vectores pgvector como string desde Supabase REST API
+- `ccbee8b` — fix: geofencing con PostgREST inner join; chat RLS para UPDATE/DELETE
+
+### Pipeline verificado en producción (18 abril 2026)
+```
+POST /embed  → Voyage AI → vector(512) → Supabase  ✅
+POST /match  → score 0.89 (test2↔test3) → daily_matches ✅
+notify-match → push en background ✅
+```
+
+### Variables de entorno
+
+| Proyecto | Variable | Dónde |
+|---|---|---|
+| pulse-matching-engine | `VOYAGE_API_KEY` | Railway ✅ + .env local ✅ |
+| pulse-matching-engine | `SUPABASE_SERVICE_ROLE_KEY` | Rotada en Railway ✅ |
+| supabase edge functions | `MATCHING_ENGINE_URL` | Pendiente deploy |
+| supabase edge functions | `MATCHING_ENGINE_SERVICE_KEY` | Pendiente deploy |
+
+### Pendiente de deploy (Edge Functions)
+```bash
+npx supabase functions deploy notify-match --project-ref ynjszpegtmtemckwgovr
+npx supabase functions deploy embed-answers --project-ref ynjszpegtmtemckwgovr
+npx supabase secrets set MATCHING_ENGINE_URL=https://pulse-matching-engine-production.up.railway.app --project-ref ynjszpegtmtemckwgovr
+npx supabase secrets set MATCHING_ENGINE_SERVICE_KEY=4dc0ccd3db35e5aedc9012b1725a107fa3e59cfb15b1fe0850de94176cd65df4 --project-ref ynjszpegtmtemckwgovr
+```
+
+### Geofencing — cómo funciona
+- `src/lib/location.ts` pide permiso `ACCESS_COARSE_LOCATION` (solo al iniciar)
+- Obtiene coordenadas → `reverseGeocodeAsync` → campo `city` del resultado
+- Guarda ciudad en `users.city` con `supabase.from('users').update({ city })`
+- Se llama en background (no bloquea UI) en dos puntos:
+  - `step4.tsx` — al completar onboarding por primera vez
+  - `login.tsx` — en cada login (actualiza si el usuario se ha movido)
+- Si el usuario deniega el permiso → devuelve null silenciosamente → geofencing hace fallback global
+- `app.json` añade plugin `expo-location` con mensaje en español para iOS/Android
+
+### Usuarios de prueba — vectores regenerados con Voyage AI
+- test2 y test3 tienen vectores reales (512 dims) en `identity_vectors` ✅
+- test4 sin vector — necesita completar onboarding para generarlo
+
+---
+
+## 23. Edge Functions — Configuración
+
+> Actualizado: 18 abril 2026
+
+### Funciones desplegadas
+
+| Función | Propósito | Caller |
+|---|---|---|
+| `notify-match` | Envía push via Expo API tras un match | Matching engine (Railway) |
+| `embed-answers` | Genera vector de identidad en onboarding | App mobile (JWT Supabase) |
+
+### Arquitectura del pipeline
+
+```
+Mobile app
+  └─→ supabase.functions.invoke('embed-answers')  [JWT usuario]
+          └─→ POST /embed  [x-service-key]
+                  └─→ Matching Engine (Railway)
+                            └─→ identity_vectors (Supabase DB)
+
+Matching Engine (cron diario 18:00)
+  └─→ POST /match  [interno]
+          └─→ POST /functions/v1/notify-match  [SUPABASE_SERVICE_ROLE_KEY]
+                  └─→ Expo Push API  →  dispositivo del usuario
+```
+
+### Secrets necesarios en Supabase
+
+> Dashboard → Project Settings → Edge Functions → Secrets
+> O via CLI:
+
+```bash
+# Solo necesarios para embed-answers
+npx supabase secrets set MATCHING_ENGINE_URL=https://pulse-matching-engine-production.up.railway.app --project-ref ynjszpegtmtemckwgovr
+npx supabase secrets set MATCHING_ENGINE_SERVICE_KEY=<SERVICE_KEY de Railway> --project-ref ynjszpegtmtemckwgovr
+
+# SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY son auto-inyectados por Supabase — no configurar
+```
+
+**`notify-match` no necesita secrets adicionales** — solo usa los auto-inyectados.
+
+### Autenticación entre servicios
+
+| Llamada | Mecanismo |
+|---|---|
+| Mobile → `embed-answers` | JWT de Supabase Auth (Bearer token del usuario) |
+| `embed-answers` → Matching Engine | Header `x-service-key: <MATCHING_ENGINE_SERVICE_KEY>` |
+| Matching Engine → `notify-match` | Header `Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>` |
+
+La `MATCHING_ENGINE_SERVICE_KEY` en Supabase debe coincidir exactamente con la variable `SERVICE_KEY` en Railway.
+
+### Comandos de deploy
+
+```bash
+# Desplegar ambas funciones
+npx supabase functions deploy notify-match --project-ref ynjszpegtmtemckwgovr
+npx supabase functions deploy embed-answers --project-ref ynjszpegtmtemckwgovr
+
+# Ver secrets configurados
+npx supabase secrets list --project-ref ynjszpegtmtemckwgovr
+
+# Ver logs en tiempo real
+npx supabase functions logs notify-match --project-ref ynjszpegtmtemckwgovr
+npx supabase functions logs embed-answers --project-ref ynjszpegtmtemckwgovr
+```
+
+### Migración SQL requerida
+
+```bash
+# Aplicar en Supabase Dashboard → SQL Editor, o via CLI:
+npx supabase db push --project-ref ynjszpegtmtemckwgovr
+```
+
+Fichero: `supabase/migrations/20260420_messages_edited_at.sql`
+```sql
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS edited_at timestamptz;
+```
+
+### Health check del pipeline
+
+```bash
+# 1. Matching engine
+curl https://pulse-matching-engine-production.up.railway.app/health
+# → {"status":"ok"}
+
+# 2. notify-match (desde terminal, con service role key)
+curl -X POST https://ynjszpegtmtemckwgovr.supabase.co/functions/v1/notify-match \
+  -H "Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":"<uuid>","match_user_id":"<uuid>"}'
+# → {"success":true} o {"error":"token_not_found"} si el usuario no tiene push token
+
+# 3. embed-answers — verificar via Supabase Dashboard → Edge Functions → Logs
+```

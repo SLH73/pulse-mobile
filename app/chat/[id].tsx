@@ -27,6 +27,7 @@ interface Message {
   content: string;
   sender_id: string;
   created_at: string;
+  edited_at?: string | null;
 }
 
 interface MatchState {
@@ -43,6 +44,7 @@ interface MatchState {
 // ────────────────────────────────────────────────────────────
 
 const MOCK_IDS = ['1', '2', '3'];
+const EDIT_WINDOW_MS = 10 * 60 * 1000; // 10 minutos
 
 function formatTimer(expiresAt: string | null): string {
   if (!expiresAt) return 'Conexión permanente';
@@ -145,19 +147,21 @@ export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
 
-  const [messages, setMessages]       = useState<Message[]>([]);
-  const [draft, setDraft]             = useState('');
-  const [userId, setUserId]           = useState<string | null>(null);
-  const [match, setMatch]             = useState<MatchState | null>(null);
-  const [timerLabel, setTimerLabel]   = useState('...');
-  const [saving, setSaving]           = useState(false);
-  const [moderating, setModerating]   = useState(false);
-  const [blockedText, setBlockedText] = useState<string | null>(null);
+  const [messages, setMessages]           = useState<Message[]>([]);
+  const [draft, setDraft]                 = useState('');
+  const [userId, setUserId]               = useState<string | null>(null);
+  const [match, setMatch]                 = useState<MatchState | null>(null);
+  const [timerLabel, setTimerLabel]       = useState('...');
+  const [saving, setSaving]               = useState(false);
+  const [moderating, setModerating]       = useState(false);
+  const [blockedText, setBlockedText]     = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
-  const [sharing, setSharing]         = useState(false);
+  const [sharing, setSharing]             = useState(false);
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
 
   const listRef     = useRef<FlatList>(null);
   const viewShotRef = useRef<ViewShot>(null);
+  const inputRef    = useRef<TextInput>(null);
   const isMock      = MOCK_IDS.includes(id ?? '');
   const insets      = useSafeAreaInsets();
 
@@ -202,8 +206,25 @@ export default function ChatScreen() {
         event: 'INSERT', schema: 'public',
         table: 'messages', filter: `match_id=eq.${id}`,
       }, (payload) => {
-        setMessages(prev => [...prev, payload.new as Message]);
+        setMessages(prev => {
+          if (prev.some(m => m.id === payload.new.id)) return prev;
+          return [...prev, payload.new as Message];
+        });
         setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public',
+        table: 'messages', filter: `match_id=eq.${id}`,
+      }, (payload) => {
+        setMessages(prev =>
+          prev.map(m => m.id === payload.new.id ? payload.new as Message : m)
+        );
+      })
+      .on('postgres_changes', {
+        event: 'DELETE', schema: 'public',
+        table: 'messages', filter: `match_id=eq.${id}`,
+      }, (payload) => {
+        setMessages(prev => prev.filter(m => m.id !== payload.old.id));
       })
       .subscribe();
 
@@ -244,11 +265,134 @@ export default function ChatScreen() {
     return () => clearInterval(interval);
   }, [match?.expires_at]);
 
-  // ── Enviar mensaje con moderación ───────────────────────
+  // ── LongPress: menú editar / borrar ─────────────────────
+  const handleLongPress = (msg: Message) => {
+    if (isMock || msg.sender_id !== userId) return;
+
+    const ageMs = Date.now() - new Date(msg.created_at).getTime();
+    const withinWindow = ageMs < EDIT_WINDOW_MS;
+
+    if (!withinWindow) {
+      Alert.alert('No disponible', 'No puedes editar ni borrar mensajes de hace más de 10 minutos.');
+      return;
+    }
+
+    Alert.alert('Mensaje', undefined, [
+      { text: 'Editar',  onPress: () => startEdit(msg) },
+      { text: 'Borrar',  style: 'destructive', onPress: () => confirmDelete(msg) },
+      { text: 'Cancelar', style: 'cancel' },
+    ]);
+  };
+
+  // ── Edición ──────────────────────────────────────────────
+  const startEdit = (msg: Message) => {
+    setEditingMessage(msg);
+    setDraft(msg.content);
+    setBlockedText(null);
+    setTimeout(() => inputRef.current?.focus(), 100);
+  };
+
+  const cancelEdit = () => {
+    setEditingMessage(null);
+    setDraft('');
+    setBlockedText(null);
+  };
+
+  // ── Borrado ──────────────────────────────────────────────
+  const confirmDelete = (msg: Message) => {
+    Alert.alert(
+      'Borrar mensaje',
+      '¿Seguro que quieres borrar este mensaje?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Borrar', style: 'destructive', onPress: () => deleteMessage(msg) },
+      ],
+    );
+  };
+
+  const deleteMessage = async (msg: Message) => {
+    const ageMs = Date.now() - new Date(msg.created_at).getTime();
+    if (ageMs >= EDIT_WINDOW_MS) {
+      Alert.alert('No disponible', 'No puedes borrar mensajes de hace más de 10 minutos.');
+      return;
+    }
+
+    // Optimistic: quitar de la lista inmediatamente
+    setMessages(prev => prev.filter(m => m.id !== msg.id));
+
+    const { error } = await supabase.from('messages').delete().eq('id', msg.id);
+
+    if (error) {
+      // Rollback: reinsertar en orden cronológico
+      setMessages(prev =>
+        [...prev, msg].sort((a, b) => a.created_at.localeCompare(b.created_at))
+      );
+      Alert.alert('Error', 'No se pudo borrar el mensaje.');
+    }
+  };
+
+  // ── Enviar / editar mensaje con moderación ───────────────
   const sendMessage = async () => {
     const text = draft.trim();
     if (!text || !userId || moderating) return;
 
+    // ── Modo edición ─────────────────────────────────────
+    if (editingMessage) {
+      const ageMs = Date.now() - new Date(editingMessage.created_at).getTime();
+      if (ageMs >= EDIT_WINDOW_MS) {
+        Alert.alert('No disponible', 'No puedes editar mensajes de hace más de 10 minutos.');
+        cancelEdit();
+        return;
+      }
+
+      setDraft('');
+      setBlockedText(null);
+      setModerating(true);
+      const modResult = await moderateMessage(text);
+      setModerating(false);
+
+      if (!modResult.approved) {
+        setBlockedText(
+          `Mensaje bloqueado por ${modResult.reason ?? 'contenido inapropiado'}. ` +
+          'Por favor, mantén un trato respetuoso.'
+        );
+        setDraft(text);
+        return;
+      }
+
+      const now = new Date().toISOString();
+
+      // Optimistic update
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === editingMessage.id ? { ...m, content: text, edited_at: now } : m
+        )
+      );
+
+      const { error } = await supabase
+        .from('messages')
+        .update({ content: text, edited_at: now })
+        .eq('id', editingMessage.id);
+
+      if (error) {
+        // Rollback
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === editingMessage.id
+              ? { ...m, content: editingMessage.content, edited_at: editingMessage.edited_at }
+              : m
+          )
+        );
+        setDraft(text);
+        Alert.alert('Error', 'No se pudo editar el mensaje.');
+        return;
+      }
+
+      setEditingMessage(null);
+      return;
+    }
+
+    // ── Modo envío nuevo ──────────────────────────────────
     setDraft('');
     setBlockedText(null);
 
@@ -328,7 +472,6 @@ export default function ChatScreen() {
     }
 
     if (result.status === 'mutual_save') {
-      // Mostrar modal de compartir en mutual save
       setShowShareModal(true);
     } else {
       Alert.alert(
@@ -357,6 +500,8 @@ export default function ChatScreen() {
   };
 
   // ── Estado derivado ──────────────────────────────────────
+  // Los mensajes borrados se eliminan del array vía DELETE realtime, por lo que
+  // no se cuentan aquí (el borrado no penaliza el umbral mínimo de guardado).
   const messageCount = messages.filter(m => m.sender_id === userId).length;
   const isPermanent  = match?.expires_at === null && match?.mutual_save_count > 0;
   const iAmA         = match?.user_a === userId;
@@ -367,6 +512,18 @@ export default function ChatScreen() {
 
   // ── Banner dinámico ──────────────────────────────────────
   const renderBanner = () => {
+    // Banner de edición (prioridad máxima)
+    if (editingMessage) {
+      return (
+        <View style={[styles.banner, styles.bannerEditing]}>
+          <Text style={styles.bannerTextEditing}>Editando mensaje</Text>
+          <TouchableOpacity onPress={cancelEdit} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.bannerEditCancel}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
     if (blockedText) {
       return (
         <View style={[styles.banner, styles.bannerBlocked]}>
@@ -488,21 +645,33 @@ export default function ChatScreen() {
         renderItem={({ item }) => {
           const isOwn = item.sender_id === userId;
           return (
-            <View style={[styles.bubble, isOwn ? styles.bubbleOwn : styles.bubbleOther]}>
-              <Text style={[styles.bubbleText, { color: isOwn ? '#0D0D0D' : '#F0F0EE' }]}>
-                {item.content}
-              </Text>
-            </View>
+            <TouchableOpacity
+              activeOpacity={isOwn ? 0.7 : 1}
+              onLongPress={() => handleLongPress(item)}
+              delayLongPress={400}
+            >
+              <View style={[styles.bubble, isOwn ? styles.bubbleOwn : styles.bubbleOther]}>
+                <Text style={[styles.bubbleText, { color: isOwn ? '#0D0D0D' : '#F0F0EE' }]}>
+                  {item.content}
+                </Text>
+                {item.edited_at && (
+                  <Text style={[styles.editedLabel, { color: isOwn ? '#0D0D0D99' : '#5F5E5A' }]}>
+                    editado
+                  </Text>
+                )}
+              </View>
+            </TouchableOpacity>
           );
         }}
       />
 
-      {/* BANNER DINAMICO */}
+      {/* BANNER DINÁMICO */}
       {renderBanner()}
 
       {/* INPUT */}
       <View style={[styles.inputRow, { paddingBottom: 12 + insets.bottom }]}>
         <TextInput
+          ref={inputRef}
           style={styles.input}
           value={draft}
           onChangeText={(t) => {
@@ -520,7 +689,7 @@ export default function ChatScreen() {
           onPress={sendMessage}
           disabled={!draft.trim() || moderating}
         >
-          <Text style={styles.sendBtnText}>{moderating ? '…' : '↑'}</Text>
+          <Text style={styles.sendBtnText}>{moderating ? '…' : (editingMessage ? '✓' : '↑')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -607,10 +776,17 @@ const styles = StyleSheet.create({
   bubbleOwn:   { backgroundColor: '#7F77DD', alignSelf: 'flex-end',  borderBottomRightRadius: 4 },
   bubbleOther: { backgroundColor: '#1A1A18', alignSelf: 'flex-start', borderBottomLeftRadius: 4 },
   bubbleText:  { fontSize: 15, lineHeight: 22 },
+  editedLabel: { fontSize: 11, marginTop: 4, opacity: 0.7 },
 
   banner:               { padding: 12, borderTopWidth: 0.5 },
   bannerBlocked:        { backgroundColor: '#2A1A1A', borderTopColor: '#E05252' },
   bannerTextBlocked:    { fontSize: 13, color: '#E05252', textAlign: 'center' },
+  bannerEditing:        {
+    backgroundColor: '#2A2200', borderTopColor: '#C8970A',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12,
+  },
+  bannerTextEditing:    { fontSize: 13, color: '#C8970A', fontWeight: '500' },
+  bannerEditCancel:     { fontSize: 16, color: '#C8970A', fontWeight: '500' },
   bannerSave:           { backgroundColor: '#1D1D3A', borderTopColor: '#7F77DD' },
   bannerTextSave:       { fontSize: 13, color: '#7F77DD', textAlign: 'center' },
   bannerWaiting:        { backgroundColor: '#1A1A18', borderTopColor: '#5F5E5A' },
