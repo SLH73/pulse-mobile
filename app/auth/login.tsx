@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { supabase } from '../../src/lib/supabase';
 import { registerForPushNotifications, savePushToken, scheduleLocalNotification } from '../../src/lib/notifications';
+import { detectAndSaveCity } from '../../src/lib/location';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -152,15 +153,16 @@ export default function LoginScreen() {
         await setupNotifications();
         router.replace('/onboarding/step0');
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         await setupNotifications();
+        detectAndSaveCity(signInData.user!.id).catch(() => {});
 
         // ✅ FIX BUG-005: Verificar onboarding_complete antes de navegar
         const { data: userData } = await supabase
           .from('users')
           .select('onboarding_complete')
-          .eq('id', data.user.id)
+          .eq('id', signInData.user!.id)
           .single();
 
         if (!userData?.onboarding_complete) {
@@ -170,7 +172,7 @@ export default function LoginScreen() {
         }
       }
     } catch (e: any) {
-      setError(e.message);
+      setError(translateAuthError(e.message));
     } finally {
       setLoading(false);
     }

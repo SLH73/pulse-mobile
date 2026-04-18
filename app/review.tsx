@@ -72,38 +72,24 @@ export default function IdentityReviewScreen() {
     setSaving(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user, session } } = await supabase.auth.getUser();
       if (!user) { router.replace('/home'); return; }
 
-      const engineUrl = process.env.EXPO_PUBLIC_MATCHING_ENGINE_URL;
-      const engineKey = process.env.EXPO_PUBLIC_MATCHING_ENGINE_KEY ?? '';
+      const { data: { session: s } } = await supabase.auth.getSession();
 
-      if (engineUrl) {
-        // Llamar al matching engine para actualizar el vector
-        // con las 2 nuevas respuestas (reemplaza respuestas 0 y 1)
-        await fetch(`${engineUrl}/embed`, {
-          method: 'POST',
-          headers: {
-            'Content-Type':  'application/json',
-            'X-Service-Key': engineKey,
-          },
-          body: JSON.stringify({
-            user_id:         user.id,
-            answers:         finalAnswers,
-            is_review:       true,   // el engine reemplaza parcialmente el vector
-            replace_indices: [0, 1], // reemplaza las posiciones 0 y 1 del vector
-          }),
-        });
-      }
-
-      // Marcar revisión como completada en Supabase
-      await supabase.rpc('complete_identity_review', {
-        p_user_id: user.id,
+      const { error: embedError } = await supabase.functions.invoke('embed-answers', {
+        body: { answers: finalAnswers },
+        headers: s?.access_token
+          ? { Authorization: `Bearer ${s.access_token}` }
+          : undefined,
       });
+
+      if (embedError) console.error('[review] error actualizando vector:', embedError.message);
+
+      await supabase.rpc('complete_identity_review', { p_user_id: user.id });
 
     } catch (e) {
       console.error('[review] error enviando revisión:', e);
-      // Si falla el engine, marcamos igualmente para no bloquear al usuario
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         await supabase.rpc('complete_identity_review', { p_user_id: user.id });

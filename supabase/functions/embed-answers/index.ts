@@ -57,7 +57,7 @@ serve(async (req) => {
       throw new Error('invalid');
     }
   } catch {
-    return new Response(JSON.stringify({ error: 'answers debe ser un array de 5 respuestas no vacías' }), {
+    return new Response(JSON.stringify({ error: 'answers debe ser un array de 2-20 respuestas no vacías' }), {
       status: 400, headers: CORS_HEADERS,
     });
   }
