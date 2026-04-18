@@ -9,8 +9,17 @@
     "name": "pulse-mobile",
     "slug": "pulse-mobile",
     "scheme": "pulsemobile",
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Pulse necesita tu ubicación para conectarte con personas de tu ciudad."
+        }
+      ]
+    ],
     "android": {
       "package": "com.pulseapp73.pulsemobile",
+      "permissions": ["ACCESS_COARSE_LOCATION"],
       "intentFilters": [
         {
           "action": "VIEW",

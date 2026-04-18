@@ -1,7 +1,8 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../src/lib/supabase';
+import { detectAndSaveCity } from '../../src/lib/location';
 
 const QUESTIONS = ["¿Qué canción escuchas cuando nadie te ve?","¿Cuándo fue la última vez que reíste de verdad? ¿Qué pasó?","¿Qué es algo que te importa mucho pero que casi nadie sabe de ti?","¿Qué harías mañana si supieras que nadie te va a juzgar?","Describe el mejor momento de los últimos 6 meses en tres palabras."];
 
@@ -15,37 +16,50 @@ export default function Step4() {
 
   const handleFinish = async () => {
     if (!canContinue) return;
-    setIsSubmitting(true);
 
-    const answers = [
-      decodeURIComponent(params.a0 as string),
-      decodeURIComponent(params.a1 as string),
-      decodeURIComponent(params.a2 as string),
-      decodeURIComponent(params.a3 as string),
-      answer.trim(),
-    ];
+    const a0 = params.a0 ? decodeURIComponent(params.a0 as string) : '';
+    const a1 = params.a1 ? decodeURIComponent(params.a1 as string) : '';
+    const a2 = params.a2 ? decodeURIComponent(params.a2 as string) : '';
+    const a3 = params.a3 ? decodeURIComponent(params.a3 as string) : '';
+
+    if (!a0 || !a1 || !a2 || !a3) {
+      Alert.alert('Error', 'Faltan respuestas anteriores. Por favor, empieza el cuestionario de nuevo.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    const answers = [a0, a1, a2, a3, answer.trim()];
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No hay sesión activa');
 
-      // Guardar perfil del usuario en Supabase
-      const { error } = await supabase
+      const { error: upsertError } = await supabase
         .from('users')
-        .upsert({
-          id: user.id,
-          email: user.email!,
-          onboarding_complete: true,
-        });
+        .upsert({ id: user.id, email: user.email!, onboarding_complete: true });
 
-      if (error) throw error;
+      if (upsertError) throw upsertError;
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const { error: embedError } = await supabase.functions.invoke('embed-answers', {
+        body: { answers },
+        headers: session?.access_token
+          ? { Authorization: `Bearer ${session.access_token}` }
+          : undefined,
+      });
+
+      if (embedError) {
+        console.error('Error generando vector:', embedError.message);
+      }
+
+      // Detectar ciudad en background — no bloquea si falla
+      detectAndSaveCity(user.id).catch(() => {});
 
       router.replace('/home');
     } catch (e: any) {
       console.error('Error guardando onboarding:', e.message);
-      router.replace('/home');
-    } finally {
       setIsSubmitting(false);
+      Alert.alert('Error', 'No se pudo guardar tu perfil. Comprueba tu conexión e inténtalo de nuevo.');
     }
   };
 

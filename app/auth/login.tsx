@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { supabase } from '../../src/lib/supabase';
 import { registerForPushNotifications, savePushToken, scheduleLocalNotification } from '../../src/lib/notifications';
+import { detectAndSaveCity } from '../../src/lib/location';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -85,6 +86,27 @@ export default function LoginScreen() {
     if (error) console.error('Error creando perfil de usuario:', error);
   };
 
+  const translateAuthError = (msg: string): string => {
+    const m = msg.toLowerCase();
+    if (m.includes('invalid login credentials') || m.includes('invalid credentials') || m.includes('user not found'))
+      return 'Email o contraseña incorrectos.';
+    if (m.includes('email not confirmed'))
+      return 'Confirma tu email antes de entrar. Revisa tu bandeja de entrada.';
+    if (m.includes('user already registered') || m.includes('already registered'))
+      return 'Este email ya está registrado. Inicia sesión.';
+    if (m.includes('password should be at least') || m.includes('password must be'))
+      return 'La contraseña debe tener al menos 6 caracteres.';
+    if (m.includes('unable to validate email') || m.includes('invalid email'))
+      return 'El formato del email no es válido.';
+    if (m.includes('signup is disabled'))
+      return 'El registro está desactivado temporalmente.';
+    if (m.includes('rate limit') || m.includes('too many requests'))
+      return 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.';
+    if (m.includes('network') || m.includes('fetch'))
+      return 'Error de conexión. Comprueba tu internet.';
+    return 'Algo salió mal. Inténtalo de nuevo.';
+  };
+
   const handleAuth = async () => {
     if (!email || !password) return;
     setError('');
@@ -131,15 +153,16 @@ export default function LoginScreen() {
         await setupNotifications();
         router.replace('/onboarding/step0');
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         await setupNotifications();
+        detectAndSaveCity(signInData.user!.id).catch(() => {});
 
         // ✅ FIX BUG-005: Verificar onboarding_complete antes de navegar
         const { data: userData } = await supabase
           .from('users')
           .select('onboarding_complete')
-          .eq('id', data.user.id)
+          .eq('id', signInData.user!.id)
           .single();
 
         if (!userData?.onboarding_complete) {
@@ -149,7 +172,7 @@ export default function LoginScreen() {
         }
       }
     } catch (e: any) {
-      setError(e.message);
+      setError(translateAuthError(e.message));
     } finally {
       setLoading(false);
     }

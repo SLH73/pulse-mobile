@@ -46,7 +46,7 @@ serve(async (req) => {
       to:    token,
       sound: 'default',
       title: 'Tu Pulse de hoy',
-      body:  'Alguien te esta esperando. Tienes 72h para conectar.',
+      body:  'Alguien te está esperando. Tienes 72h para conectar.',
       data:  { type: 'new_match', match_user_id },
       channelId: 'pulse',
     };
