@@ -148,6 +148,16 @@ export default function LoginScreen() {
         // ✅ FIX BUG-001: Crear fila en users inmediatamente tras signup
         if (data.user) {
           await createUserProfile(data.user.id);
+
+          // Enviar invitación de consentimiento parental si el menor tiene <16 años
+          if (needsParentalConsent() && parentEmail) {
+            const { data: { session } } = await supabase.auth.getSession();
+            supabase.functions.invoke('send-parental-invite', {
+              headers: session?.access_token
+                ? { Authorization: `Bearer ${session.access_token}` }
+                : undefined,
+            }).catch(() => {}); // no bloquea el registro si falla
+          }
         }
 
         await setupNotifications();
