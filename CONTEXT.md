@@ -1,5 +1,5 @@
 # CONTEXT.md — Proyecto Pulse
-> Documento de contexto completo del proyecto. Última actualización: abril 2026 — todas las mejoras del roadmap implementadas.
+> Documento de contexto completo del proyecto. Última actualización: 18 abril 2026 — auditoría de seguridad completa.
 > Usar este fichero para onboarding de nuevos desarrolladores, continuación de sesiones con IA, y referencia técnica del estado del proyecto.
 
 ---
@@ -143,16 +143,22 @@ C:\Users\slope\
 | `is_user_paused(user_id)` | Comprueba si el usuario está pausado |
 | `get_today_match(user_id)` | Obtiene el match del día del usuario |
 
+### Columnas adicionales en `users`
+- `parental_consent_verified` — boolean DEFAULT false: consentimiento parental verificado via OTP
+- `city` — ciudad detectada automáticamente con expo-location al hacer login
+
 ### Edge Functions
 
-| Función | Propósito |
-|---|---|
-| `notify-match` | Envía notificación push via Expo API tras generar un match |
-| `onboarding` | Genera y cifra el vector de identidad |
-| `match` | Encuentra el mejor match del día |
-| `messages` | Envía mensajes |
-| `contacts` | Guarda contactos |
-| `invites` | Gestiona invitaciones |
+| Función | Propósito | JWT |
+|---|---|---|
+| `notify-match` | Envía push via Expo API — valida match real en BD antes de enviar | `--no-verify-jwt` |
+| `moderate` | Modera mensajes con Claude Haiku — fail-closed | `--no-verify-jwt` |
+| `send-parental-invite` | Envía OTP al email parental tras registro de menor | JWT requerido |
+| `onboarding` | Genera y cifra el vector de identidad | JWT requerido |
+| `match` | Encuentra el mejor match del día | `--no-verify-jwt` |
+| `messages` | Envía mensajes | JWT requerido |
+| `contacts` | Guarda contactos | JWT requerido |
+| `invites` | Gestiona invitaciones | JWT requerido |
 
 ---
 
@@ -208,16 +214,18 @@ El home comprueba en orden:
 
 ## 7. Moderación
 
-### Claude API (Haiku)
-- Antes de enviar cada mensaje → llamada a Claude Haiku
+### Edge Function `moderate` (server-side)
+- La app cliente llama a la Edge Function `moderate` — la API key de Anthropic nunca sale del servidor
+- Edge Function llama a Claude Haiku con timeout de 6 segundos (AbortController)
 - Analiza: toxicity, threat, sexually_explicit (scores 0.0–1.0)
 - Score > 0.8 → mensaje bloqueado, banner rojo en el chat
 - Score > 0.9 → además se inserta flag en `moderation_flags` para revisión manual
-- Sin API key → moderación desactivada silenciosamente (modo dev)
+- **Fail-closed:** si la Edge Function falla → `{ approved: false, flag: true }` (nunca falla-abierto)
+- `src/lib/moderation.ts` es un thin wrapper que llama a la Edge Function
 
-### Variables de entorno
+### Variables de entorno (Supabase secrets)
 ```
-EXPO_PUBLIC_ANTHROPIC_KEY=sk-ant-...
+ANTHROPIC_API_KEY=sk-ant-...   # en Supabase secrets, nunca en el cliente
 ```
 
 ---
@@ -240,7 +248,7 @@ Expo Push API actúa como intermediario de FCM/APNs. No requiere configurar Goog
 ### RevenueCat
 - Proyecto: Pulse (ID: 185bf0ce)
 - Entitlement: `pulse_deep`
-- API key Android: `test_FJkNKIYCGitzQvcxpLOXansfcRY` (reemplazar por producción antes del lanzamiento)
+- API key: en `.env.local` como `EXPO_PUBLIC_REVENUECAT_ANDROID_KEY` y `EXPO_PUBLIC_REVENUECAT_IOS_KEY` (nunca hardcodeada)
 
 ### Beneficios Pulse Deep (4,99€/mes)
 - Hasta 3 conexiones diarias
@@ -260,7 +268,13 @@ Expo Push API actúa como intermediario de FCM/APNs. No requiere configurar Goog
 
 - URL: https://pulse-parental.vercel.app (pendiente dominio personalizado)
 - GitHub: https://github.com/SLH73/pulse-parental
-- Acceso: con el email que el menor introdujo como "email parental" al registrarse
+- Acceso: OTP via email (Supabase Auth) — el tutor recibe un código de 6 dígitos
+
+### Flujo de autenticación parental
+1. El menor introduce el email del tutor al registrarse → se guarda en `users.parental_email`
+2. Tras el registro, la app llama a `send-parental-invite` Edge Function → envía OTP al tutor
+3. El tutor accede al panel → introduce su email → recibe OTP → introduce código → sesión en `sessionStorage` (24h)
+4. `verify-otp` verifica el OTP y marca `parental_consent_verified = true` en la fila del menor
 
 ### Muestra (sin revelar nombres ni mensajes)
 - Nivel de profundidad 1-5
@@ -268,6 +282,14 @@ Expo Push API actúa como intermediario de FCM/APNs. No requiere configurar Goog
 - Contactos guardados
 - Tendencia de bienestar social
 - Botón para pausar la app del menor
+
+### API Routes (rate limiting aplicado)
+| Ruta | Límite | Propósito |
+|---|---|---|
+| `/api/send-otp` | 5 req/min/IP | Envío OTP al tutor |
+| `/api/verify-otp` | 10 req/min/IP | Verificación OTP |
+| `/api/child` | 30 req/min/IP | Datos del menor |
+| `/api/pause` | — | Pausar/reanudar app del menor |
 
 ---
 
@@ -280,9 +302,18 @@ Expo Push API actúa como intermediario de FCM/APNs. No requiere configurar Goog
 
 ### Compliance regulatorio
 - COPPA (EE.UU.): verificación de edad, restricciones para <13
-- DSA Art. 28 (Europa): consentimiento parental por email para <16
-- GDPR: right to erasure, soft delete + purga en 30 días
+- DSA Art. 28 (Europa): consentimiento parental **verificado** via OTP para <16 — columna `parental_consent_verified`
+- GDPR Art. 17: soft delete + purga física automática a los 30 días via pg_cron (diaria 03:00 UTC)
+- GDPR mensajes: purga de mensajes de matches expirados hace 7+ días (03:30 UTC)
 - LOPD (España): DPO designado, ROPA registrado
+
+### pg_cron (GDPR auto-purge)
+```sql
+-- Ejecuta a las 03:00 UTC diariamente
+SELECT cron.schedule('purge-deleted-users', '0 3 * * *', 'SELECT purge_deleted_users()');
+-- Ejecuta a las 03:30 UTC diariamente
+SELECT cron.schedule('purge-expired-messages', '30 3 * * *', 'SELECT purge_expired_messages()');
+```
 
 ---
 
@@ -307,10 +338,11 @@ IDs hasheados con SHA-256. Nunca contenido de mensajes ni datos identificables. 
 EXPO_PUBLIC_SUPABASE_URL=https://ynjszpegtmtemckwgovr.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_CG8y4ZhlRKyQSFRqH8Fw4A_kbUAw0xe
 EXPO_PUBLIC_MATCHING_ENGINE_URL=https://pulse-matching-engine-production.up.railway.app
-EXPO_PUBLIC_ANTHROPIC_KEY=sk-ant-...
-EXPO_PUBLIC_REVENUECAT_ANDROID_KEY=test_FJkNKIYCGitzQvcxpLOXansfcRY
+EXPO_PUBLIC_REVENUECAT_ANDROID_KEY=tu-key-android   # NUNCA hardcodear — leer de .env
+EXPO_PUBLIC_REVENUECAT_IOS_KEY=tu-key-ios
 EXPO_PUBLIC_PROJECT_ID=0eeaa082-4aeb-47df-9699-f30d621983fb
 ```
+> ⚠️ `EXPO_PUBLIC_ANTHROPIC_KEY` eliminada del cliente — la clave vive en Supabase secrets.
 
 ### pulse-matching-engine (.env)
 ```
@@ -586,9 +618,44 @@ El modelo tiene contexto completo del producto, arquitectura, stack, código y e
 | Botones Android tapan "Cerrar sesión" en perfil | `useSafeAreaInsets().bottom` en `paddingBottom` del ScrollView |
 | Botones Android tapan input del chat | `useSafeAreaInsets().bottom` en `paddingBottom` del `inputRow` |
 
+---
+
+## 23. Auditoría de seguridad — 18 abril 2026
+
+> Auditoría completa de 7 áreas. 5 vulnerabilidades críticas/altas corregidas.
+
+### Vulnerabilidades corregidas
+
+| Severidad | Vulnerabilidad | Fix |
+|---|---|---|
+| CRÍTICO | API key Anthropic expuesta en cliente (`EXPO_PUBLIC_ANTHROPIC_KEY`) | Movida a Supabase secrets; moderación via Edge Function `moderate` |
+| CRÍTICO | Panel parental sin autenticación real (cualquiera con el email accedía) | OTP via Supabase Auth; `LoginForm` two-step email→código |
+| CRÍTICO | GDPR Art. 17 sin auto-purge | pg_cron: `purge_deleted_users()` diaria 03:00 UTC, `purge_expired_messages()` 03:30 UTC |
+| ALTO | Consentimiento parental no verificado (solo guardaba email) | `send-parental-invite` Edge Function + `parental_consent_verified` columna en BD |
+| ALTO | `notify-match` enviaba push sin validar match real | Validación UUID + query `daily_matches` antes de enviar |
+| MEDIO | RevenueCat keys hardcodeadas en source | `EXPO_PUBLIC_REVENUECAT_ANDROID_KEY` / `IOS_KEY` en `.env` |
+| MEDIO | Mock IDs del chat accesibles en producción | `isMock = __DEV__ && MOCK_IDS.includes(id)` |
+| MEDIO | Token push logueado en producción | `if (__DEV__) console.log(...)` |
+| MEDIO | `.gitignore` no cubría `.env.*` | Añadido `.env`, `.env.*`, `!.env.example` |
+| MEDIO | No había rate limiting en panel parental | Helper `src/lib/rate-limit.ts`; 5/10/30 req/min según ruta |
+
+### Commits de seguridad
+- `pulse-mobile` rama `claude/musing-wozniak-b2afbc`: 4 commits — ver PR en GitHub
+- `pulse-parental` master `5e109fc`: rate limiting todas las API routes
+
+### Migraciones Supabase — aplicar manualmente
+```sql
+-- 20260418_parental_consent.sql (ya incluido en el repo)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS parental_consent_verified boolean NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS parental_email text;
+
+-- 20260421_gdpr_purge.sql (ya incluido en el repo)
+-- Ver archivo completo para funciones purge_deleted_users() y purge_expired_messages()
+```
+
 ### Veredicto
 
-**✅ CÓDIGO LISTO PARA LANZAMIENTO — 17 abril 2026**
+**✅ CÓDIGO LISTO PARA LANZAMIENTO — 18 abril 2026**
 
 ### Pendientes operacionales antes del 1 de mayo
 
@@ -597,7 +664,8 @@ El modelo tiene contexto completo del producto, arquitectura, stack, código y e
 | EAS Build Android | Sin builds disponibles en plan Free hasta 1 mayo. Subir plan o esperar reset |
 | Probar notificaciones push en Samsung Galaxy A32 5G | Requiere el nuevo build (intentFilters) |
 | Configurar `pulse_deep_monthly` en Google Play Console (4,99€) | Necesario para RevenueCat en producción |
-| Reemplazar API key test RevenueCat por producción | `EXPO_PUBLIC_REVENUECAT_ANDROID_KEY` |
+| Añadir keys RevenueCat producción a `.env.local` | `EXPO_PUBLIC_REVENUECAT_ANDROID_KEY` y `IOS_KEY` |
 | Llegar a 200 usuarios en lista de espera Madrid | Marketing |
 | Activar geofencing por ciudad | Backend |
 | Briefing equipo moderación | — |
+| Añadir `ANTHROPIC_API_KEY` a Supabase secrets | `npx supabase secrets set ANTHROPIC_API_KEY=sk-ant-...` |
