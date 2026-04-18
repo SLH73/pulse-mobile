@@ -13,9 +13,8 @@ import { Platform } from 'react-native';
 // Constantes
 // ────────────────────────────────────────────────────────────
 
-// API keys de RevenueCat (test — reemplazar por producción antes del lanzamiento)
-const RC_ANDROID_KEY = 'test_FJkNKIYCGitzQvcxpLOXansfcRY';
-const RC_IOS_KEY     = 'test_FJkNKIYCGitzQvcxpLOXansfcRY'; // actualizar cuando tengas iOS key
+const RC_ANDROID_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ?? '';
+const RC_IOS_KEY     = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? '';
 
 export const ENTITLEMENT_ID  = 'pulse_deep';
 export const OFFERING_ID     = 'default';

@@ -48,7 +48,7 @@ export async function registerPushToken(userId: string): Promise<void> {
     });
 
     const token = tokenData.data;
-    console.log('[notifications] Token registrado:', token.slice(0, 30) + '...');
+    if (__DEV__) console.log('[notifications] Token registrado:', token.slice(0, 20) + '...');
 
     // Guardar en Supabase
     await supabase.rpc('save_push_token', {

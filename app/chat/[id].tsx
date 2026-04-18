@@ -158,7 +158,7 @@ export default function ChatScreen() {
 
   const listRef     = useRef<FlatList>(null);
   const viewShotRef = useRef<ViewShot>(null);
-  const isMock      = MOCK_IDS.includes(id ?? '');
+  const isMock      = __DEV__ && MOCK_IDS.includes(id ?? '');
   const insets      = useSafeAreaInsets();
 
   // ── Sesión ──────────────────────────────────────────────
