@@ -132,10 +132,14 @@ Sin esto la voz lee tres horas al mismo compás y se hace insoportable.
   `[[PAUSA:1200]]` y se cierra el título con punto para que la voz se detenga.
 - **Cambio de escena**: `***`, `* * *`, `···`, `§` o línea en blanco doble
   dentro del capítulo → `[[PAUSA:700]]`.
-- **Frases de más de 40 palabras**: se busca una conjunción (`y`, `pero`,
-  `aunque`, `mientras`, `porque`, `cuando`, `sin embargo`) sin coma en las 12
-  palabras anteriores y se le antepone una. Solo una coma por frase larga: la
-  puntuación inventada de más suena a tartamudeo.
+- **Frases de más de 40 palabras**: se busca una conjunción (`pero`, `aunque`,
+  `mientras`, `porque`, `cuando`, `sin embargo`) sin coma en las 12 palabras
+  anteriores y se le antepone una. Solo una coma por frase larga: la puntuación
+  inventada de más suena a tartamudeo.
+
+  **La `y` no está en esa lista, a propósito.** Aparece dentro de numerales
+  («treinta y un auxiliares») y de enumeraciones, donde además la coma antes de
+  `y` es incorrecta en español. Meterla partía frases por la mitad.
 
 Los marcadores `[[PAUSA:ms]]` no se sintetizan: en el paso 5 parten el texto y
 se convierten en silencio real con ffmpeg.

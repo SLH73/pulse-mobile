@@ -136,7 +136,9 @@ def limpiar(texto, informe):
 
 def respirar(parrafo):
     """Una coma en frases de más de 40 palabras, ante conjunción sin coma cerca."""
-    CONJ = r"(?:y|pero|aunque|mientras|porque|cuando|pues|sin embargo|no obstante)"
+    # Sin "y": aparece dentro de numerales ("treinta y un") y de enumeraciones,
+    # donde la coma antes de "y" es además incorrecta en español.
+    CONJ = r"(?:pero|aunque|mientras|porque|cuando|pues|sin embargo|no obstante)"
     fuera = []
     for frase in re.split(r"(?<=[\.\?\!…])\s+", parrafo):
         pal = frase.split()
